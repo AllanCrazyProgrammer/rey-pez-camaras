@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type Hls from 'hls.js';
 import type { StreamStatus } from '../lib/types';
+import { isInsecureBridge } from '../lib/rtsp';
 
 /**
  * Reproduce un HLS con hls.js (Chrome/Firefox/Android) o con el
@@ -20,10 +21,14 @@ export function useHls(src: string | null, active: boolean): {
 } {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [status, setStatus] = useState<StreamStatus>('idle');
+  // App en https y puente en http: el navegador bloquearía la petición
+  // (contenido mixto). Se deriva en el render y no se intenta reproducir,
+  // así la baldosa dice "Puente sin HTTPS" en vez de "Sin señal".
+  const insecure = src !== null && isInsecureBridge(src);
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!active || !src || !video) {
+    if (!active || !src || !video || insecure) {
       setStatus(!src ? 'no-bridge' : 'idle');
       return;
     }
@@ -87,7 +92,7 @@ export function useHls(src: string | null, active: boolean): {
       video.removeAttribute('src');
       video.load();
     };
-  }, [src, active]);
+  }, [src, active, insecure]);
 
-  return { videoRef, status };
+  return { videoRef, status: insecure ? 'insecure' : status };
 }

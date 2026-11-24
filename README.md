@@ -20,20 +20,39 @@ npm run build   # build de producción (tsc + vite build)
 npm run preview # servir el build
 ```
 
-## Cómo poner el puente go2rtc en la bodega
+## Cómo poner el puente go2rtc (Mac mini, arriba junto al DVR)
 
 1. Consigue la IP local del DVR: en el DVR, Menú Principal → Sistema →
-   Red → TCP/IP. O con Fing desde el celular, en la misma WiFi.
-2. En una compu de la bodega que quede prendida, descarga go2rtc
-   (<https://github.com/AlexxIT/go2rtc>).
-3. Abre esta app → **Ajustes**, pon IP, usuario y clave del DVR y la
-   dirección del puente. Copia o descarga el `go2rtc.yaml` que genera y
-   guárdalo junto al ejecutable de go2rtc en esa compu.
-4. Arranca go2rtc (escucha en `:1984`) y pon su dirección en Ajustes, por
-   ejemplo `http://192.168.1.100:1984`. Vuelve al mosaico: las cámaras
-   pasan a “En vivo”.
+   Red → TCP/IP. O con Fing desde el celular, en la misma red. Déjala fija.
+2. En la Mac mini (por cable junto al DVR, siempre prendida), descarga
+   go2rtc (<https://github.com/AlexxIT/go2rtc>).
+3. Abre esta app → **Ajustes**, pon IP, usuario y clave del DVR. Copia o
+   descarga el `go2rtc.yaml` que genera y guárdalo junto al ejecutable de
+   go2rtc en la Mac mini.
+4. Arranca go2rtc. Escucha solo en la propia Mac (`127.0.0.1:1984`).
+   Prueba ahí `http://localhost:1984`.
+5. **HTTPS con Tailscale Serve** (obligatorio para la web en vivo):
+   - Tailscale en la Mac mini y en cada visor, con la misma cuenta.
+   - En <https://login.tailscale.com/admin/dns> activa MagicDNS y HTTPS
+     Certificates.
+   - En la Mac mini: `tailscale serve --bg 1984` → da
+     `https://mac-mini.tu-red.ts.net`.
+   - Esa dirección va en Ajustes → “Puente go2rtc”.
 
-La pestaña **Guía del puente** dentro de la app explica los 4 pasos.
+La pestaña **Guía del puente** dentro de la app explica los 5 pasos.
+
+### Por qué HTTPS y CORS
+
+- La app vive en `https://…github.io`. Los navegadores bloquean video
+  `http://` dentro de una página `https://` (contenido mixto). Por eso
+  `http://100.x.x.x:1984` no sirve desde la web: hace falta la dirección
+  `https://…ts.net` de Tailscale Serve. Excepción: `http://localhost` en la
+  propia Mac mini.
+- Si el puente en Ajustes es `http://`, la app lo avisa (“Puente sin
+  HTTPS”) en vez de mostrar “Sin señal”.
+- El `go2rtc.yaml` generado trae `api.origin: "*"` (CORS), para que la web
+  pueda leer el HLS del puente, y `listen: "127.0.0.1:1984"` para que go2rtc
+  no quede abierto en la red; Tailscale Serve lo publica solo a tus aparatos.
 
 ## Rendimiento
 

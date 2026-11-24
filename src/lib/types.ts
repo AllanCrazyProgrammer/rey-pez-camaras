@@ -20,7 +20,10 @@ export interface DvrSettings {
   username: string;
   /** Clave del DVR. Solo vive en localStorage de este navegador, nunca en el repo. */
   password: string;
-  /** Base del puente go2rtc en la red local, ej. http://192.168.1.100:1984 */
+  /**
+   * Base del puente go2rtc. Desde la web (https) debe ser https, ej. la
+   * dirección de Tailscale Serve: https://mac-mini.tu-red.ts.net
+   */
   bridgeUrl: string;
   /** Columnas del mosaico. */
   gridCols: 2 | 3 | 4;
@@ -29,6 +32,8 @@ export interface DvrSettings {
 export type StreamStatus =
   | 'idle'
   | 'no-bridge'
+  /** Puente http:// desde la app https://: el navegador lo bloquea. */
+  | 'insecure'
   | 'loading'
   | 'playing'
   | 'error';

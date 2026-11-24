@@ -5,6 +5,7 @@ import { useHls } from '../hooks/useHls';
 const STATUS_LABEL: Record<StreamStatus, string> = {
   idle: 'En pausa',
   'no-bridge': 'Sin puente',
+  insecure: 'Puente sin HTTPS',
   loading: 'Cargando…',
   playing: 'En vivo',
   error: 'Sin señal',

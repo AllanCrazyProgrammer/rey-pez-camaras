@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { CameraConfig, DvrSettings } from '../lib/types';
-import { generateGo2rtcYaml, maskRtspUrlSafe } from '../lib/rtsp';
+import { generateGo2rtcYaml, isInsecureBridge, maskRtspUrlSafe } from '../lib/rtsp';
 
 interface Props {
   settings: DvrSettings;
@@ -44,6 +44,7 @@ export function SettingsPanel({ settings, updateSettings, cameras, updateCamera 
   }, [yaml]);
 
   const configured = settings.dvrIp.trim() !== '' && settings.bridgeUrl.trim() !== '';
+  const insecure = isInsecureBridge(settings.bridgeUrl);
 
   return (
     <section className="panel" aria-label="Ajustes del DVR y cámaras">
@@ -85,20 +86,32 @@ export function SettingsPanel({ settings, updateSettings, cameras, updateCamera 
           />
         </label>
         <label>
-          Puente go2rtc (en la bodega)
+          Puente go2rtc (dirección https de Tailscale de la Mac mini)
           <input
-            type="text"
-            placeholder="http://192.168.1.100:1984"
+            type="url"
+            inputMode="url"
+            placeholder="https://mac-mini.tu-red.ts.net"
             value={settings.bridgeUrl}
             onChange={(e) => updateSettings({ bridgeUrl: e.target.value })}
             autoComplete="off"
           />
         </label>
-        <p className={configured ? 'ok' : 'warn'}>
-          {configured
-            ? '✓ DVR y puente configurados.'
-            : 'Falta la IP del DVR o la dirección del puente para ver video en vivo.'}
-        </p>
+        {insecure ? (
+          <p className="warn" role="alert">
+            ⚠ El puente es <code>http://</code> y esta app está en{' '}
+            <code>https://</code>: el navegador bloquea el video. Pon la
+            dirección https que da Tailscale Serve en la Mac mini, por ejemplo{' '}
+            <code>https://mac-mini.tu-red.ts.net</code> (Guía del puente, paso
+            5). En Chrome, en la misma Mac mini, también sirve{' '}
+            <code>http://localhost:1984</code> para probar.
+          </p>
+        ) : (
+          <p className={configured ? 'ok' : 'warn'}>
+            {configured
+              ? '✓ DVR y puente configurados.'
+              : 'Falta la IP del DVR o la dirección del puente para ver video en vivo.'}
+          </p>
+        )}
       </fieldset>
 
       <fieldset>

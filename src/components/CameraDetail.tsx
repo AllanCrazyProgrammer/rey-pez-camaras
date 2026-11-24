@@ -53,7 +53,18 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
 
       <div className="detail-video">
         {hlsUrl ? (
-          <video ref={videoRef} muted playsInline autoPlay controls aria-label={camera.name} />
+          // crossOrigin: pide el video con CORS (go2rtc trae origin "*") para
+          // que la "Foto del momento" pueda leer el cuadro. Sin esto, con HLS
+          // nativo (Safari, Chrome nuevo) el canvas queda bloqueado.
+          <video
+            ref={videoRef}
+            crossOrigin="anonymous"
+            muted
+            playsInline
+            autoPlay
+            controls
+            aria-label={camera.name}
+          />
         ) : (
           <div className="detail-no-signal">
             <p>Sin puente configurado</p>
@@ -67,7 +78,9 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
               ? 'Sin señal'
               : status === 'loading'
                 ? 'Cargando…'
-                : 'Sin puente'}
+                : status === 'insecure'
+                  ? 'Puente sin HTTPS'
+                  : 'Sin puente'}
         </span>
       </div>
 

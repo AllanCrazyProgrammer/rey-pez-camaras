@@ -4,6 +4,7 @@ import { CameraGrid } from './components/CameraGrid';
 import { CameraDetail } from './components/CameraDetail';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import type { CameraConfig } from './lib/types';
+import { isInsecureBridge } from './lib/rtsp';
 import './App.css';
 
 // Code-splitting (react.dev: lazy + Suspense): Ajustes y Guía solo se
@@ -46,6 +47,10 @@ export default function App() {
   );
 
   const bridgeOk = settings.bridgeUrl.trim() !== '' && settings.dvrIp.trim() !== '';
+  const bridgeInsecure = useMemo(
+    () => isInsecureBridge(settings.bridgeUrl),
+    [settings.bridgeUrl],
+  );
 
   return (
     <div className="app">
@@ -54,8 +59,14 @@ export default function App() {
           <h1>Cámaras · Bodega Rey Pez</h1>
           <p>Dahua DH-XVR1B16H-I/T · {activeCameras.length} cámaras · solo Dahua</p>
         </div>
-        <span className={`bridge-badge ${bridgeOk ? 'bridge-badge--ok' : ''}`}>
-          {bridgeOk ? 'Puente configurado' : 'Puente sin configurar'}
+        <span
+          className={`bridge-badge ${bridgeOk && !bridgeInsecure ? 'bridge-badge--ok' : ''}`}
+        >
+          {bridgeInsecure
+            ? 'Puente sin HTTPS'
+            : bridgeOk
+              ? 'Puente configurado'
+              : 'Puente sin configurar'}
         </span>
       </header>
 

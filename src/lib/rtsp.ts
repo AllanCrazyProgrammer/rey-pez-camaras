@@ -18,7 +18,8 @@ export function buildRtspUrl(
   return `rtsp://${user}:${pass}@${host}:554/cam/realmonitor?channel=${channel}&subtype=${subtype}`;
 }
 
-/** Misma URL con la clave tapada, segura para mostrar en pantalla. */export function maskRtspUrlSafe(settings: DvrSettings, channel: number, subtype: 0 | 1): string {
+/** Misma URL con la clave tapada, segura para mostrar en pantalla. */
+export function maskRtspUrlSafe(settings: DvrSettings, channel: number, subtype: 0 | 1): string {
   // Construir la versión enmascarada sin pasar por la clave real.
   const host = settings.dvrIp.trim() || '<IP-DEL-DVR>';
   const user = settings.username.trim() || 'admin';
@@ -30,9 +31,53 @@ export function streamName(channel: number, main: boolean): string {
   return main ? `cam${channel}` : `cam${channel}sub`;
 }
 
+/** Hosts que el navegador trata como seguros aunque vayan por http://. */
+function isLoopbackHost(hostname: string): boolean {
+  return (
+    hostname === 'localhost' ||
+    hostname.endsWith('.localhost') ||
+    hostname === '[::1]' ||
+    /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)
+  );
+}
+
+/**
+ * Limpia la dirección del puente: quita espacios y "/" final.
+ * Si no trae http(s)://, usa http:// para IPs y localhost, y https://
+ * para nombres (ej. mac-mini.tu-red.ts.net de Tailscale Serve).
+ */
+export function normalizeBridgeUrl(raw: string): string {
+  const base = raw.trim().replace(/\/+$/, '');
+  if (!base) return '';
+  if (/^https?:\/\//i.test(base)) return base;
+  const host = base.split(/[/:]/)[0].toLowerCase();
+  const plainHttp = isLoopbackHost(host) || /^\d{1,3}(\.\d{1,3}){3}$/.test(host);
+  return `${plainHttp ? 'http' : 'https'}://${base}`;
+}
+
+/**
+ * true si el navegador va a bloquear el puente por "contenido mixto":
+ * la app está en https:// (GitHub Pages) y el puente es http:// (que no
+ * sea localhost). Chrome, Safari y Firefox no cargan ese video.
+ */
+export function isInsecureBridge(
+  bridgeUrl: string,
+  pageProtocol: string = globalThis.location?.protocol ?? 'https:',
+): boolean {
+  if (pageProtocol !== 'https:') return false;
+  const normalized = normalizeBridgeUrl(bridgeUrl);
+  if (!normalized) return false;
+  try {
+    const url = new URL(normalized);
+    return url.protocol === 'http:' && !isLoopbackHost(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
 /** URL HLS que sirve go2rtc para un stream. null si no hay puente configurado. */
 export function buildHlsUrl(bridgeUrl: string, stream: string): string | null {
-  const base = bridgeUrl.trim().replace(/\/$/, '');
+  const base = normalizeBridgeUrl(bridgeUrl);
   if (!base) return null;
   return `${base}/api/stream.m3u8?src=${encodeURIComponent(stream)}`;
 }
@@ -48,9 +93,13 @@ export function generateGo2rtcYaml(
   const active = cameras.filter((c) => c.enabled);
   const lines: string[] = [
     '# go2rtc.yaml — Rey Pez / Bodega (Dahua DH-XVR1B16H-I/T)',
-    '# Pegar en la compu de la bodega junto al binario de go2rtc.',
+    '# Pegar en la Mac mini (puente) junto al binario de go2rtc.',
     '# NO subir este archivo a GitHub: lleva la clave del DVR.',
     '# Docs: https://github.com/AlexxIT/go2rtc',
+    '#',
+    '# Para verlo desde la web (https) sin que el navegador lo bloquee:',
+    '#   tailscale serve --bg 1984',
+    '# y en Ajustes, puente = https://<mac-mini>.<tu-red>.ts.net',
     '',
     'streams:',
   ];
@@ -59,7 +108,11 @@ export function generateGo2rtcYaml(
     lines.push(`  ${streamName(cam.channel, false)}: ${buildRtspUrl(settings, cam.channel, 1)}`);
   }
   lines.push('', 'api:');
-  lines.push('  listen: ":1984"');
+  // Solo escucha en la propia Mac mini; Tailscale Serve lo publica con
+  // HTTPS solo para tus aparatos. Así go2rtc no queda abierto en la red.
+  lines.push('  listen: "127.0.0.1:1984"');
+  // CORS: permite que la web (github.io) lea el video del puente.
+  lines.push('  origin: "*"');
   lines.push('');
   return lines.join('\n');
 }

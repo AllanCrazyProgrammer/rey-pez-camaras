@@ -5,7 +5,7 @@
 export function BridgeGuide() {
   return (
     <section className="panel" aria-label="Guía del puente go2rtc">
-      <h2>Guía del puente — 4 pasos</h2>
+      <h2>Guía del puente — 5 pasos</h2>
       <ol className="guide-steps">
         <li>
           <strong>Consigue la IP del DVR.</strong> En el DVR: Menú Principal → Sistema →
@@ -32,6 +32,17 @@ export function BridgeGuide() {
           pon por ejemplo <code>http://192.168.1.100:1984</code> (la IP de esa
           compu). Vuelve al mosaico: las cámaras deben pasar a “En vivo”.
         </li>
+        <li>
+          <strong>Ver desde casa o desde otra red: Tailscale.</strong> Instala
+          Tailscale en la Mac mini y en cada aparato que va a ver (celular,
+          compu, Apple TV), con la misma cuenta. La Mac mini queda arriba,
+          por cable junto al DVR, corriendo go2rtc. En Ajustes, en “Puente
+          go2rtc”, pon la IP de Tailscale de la Mac mini, por ejemplo{' '}
+          <code>http://100.64.0.10:1984</code> (la IP 100.x que le da
+          Tailscale, no la de la bodega). Así se ve desde casa, desde abajo
+          aunque sea otra red, y desde cualquier lugar donde Tailscale esté
+          prendido. Sin abrir puertos ni exponer el DVR a internet.
+        </li>
       </ol>
       <h3>¿Por qué hace falta un puente?</h3>
       <p>
@@ -45,7 +56,8 @@ export function BridgeGuide() {
       <ul>
         <li>Revisa que go2rtc siga corriendo en la compu de la bodega.</li>
         <li>Verifica IP, usuario y clave en Ajustes.</li>
-        <li>Confirma que la compu y el DVR estén en la misma red.</li>
+        <li>Confirma que la compu y el DVR estén en la misma red (o que ambos
+        estén en Tailscale, si ves desde fuera).</li>
         <li>En el DVR, el video debe estar en H.264 (no H.265) para el puente.</li>
       </ul>
     </section>

@@ -46,18 +46,22 @@ export function useHls(src: string | null, active: boolean): {
 
     async function setup() {
       if (!video) return;
-      // Safari: HLS nativo, sin librería.
-      if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        video.src = src as string;
-        video.addEventListener('playing', onPlaying);
-        video.addEventListener('error', onVideoError);
-        void video.play().catch(() => undefined);
-        return;
-      }
+      // hls.js primero en todo navegador con MediaSource (Chrome, Firefox,
+      // Android, Safari de Mac y iOS 17.1+). Chrome de escritorio ya dice
+      // que reproduce HLS nativo (canPlayType = "maybe"), pero no lee los
+      // segmentos MPEG-TS de go2rtc (DEMUXER_ERROR_COULD_NOT_PARSE).
       const { default: HlsClass } = await import('hls.js');
       if (cancelled || !video) return;
       if (!HlsClass.isSupported()) {
-        setStatus('error');
+        // Sin MediaSource (iPhone viejo): HLS nativo del navegador.
+        if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          video.src = src as string;
+          video.addEventListener('playing', onPlaying);
+          video.addEventListener('error', onVideoError);
+          void video.play().catch(() => undefined);
+        } else {
+          setStatus('error');
+        }
         return;
       }
       hls = new HlsClass({

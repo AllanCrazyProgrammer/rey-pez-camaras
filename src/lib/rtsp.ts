@@ -79,7 +79,9 @@ export function isInsecureBridge(
 export function buildHlsUrl(bridgeUrl: string, stream: string): string | null {
   const base = normalizeBridgeUrl(bridgeUrl);
   if (!base) return null;
-  return `${base}/api/stream.m3u8?src=${encodeURIComponent(stream)}`;
+  // &mp4: segmentos fMP4 en vez de MPEG-TS. Con TS, hls.js solo llegaba a
+  // meter el cuadro clave de cada segundo al buffer y el video no arrancaba.
+  return `${base}/api/stream.m3u8?src=${encodeURIComponent(stream)}&mp4`;
 }
 
 /**

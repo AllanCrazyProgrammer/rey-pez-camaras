@@ -46,7 +46,9 @@ export default function App() {
     [activeCameras],
   );
 
-  const bridgeOk = settings.bridgeUrl.trim() !== '' && settings.dvrIp.trim() !== '';
+  // Para ver video solo hace falta el puente; la IP del DVR solo sirve
+  // para generar el go2rtc.yaml en la Mac mini.
+  const bridgeOk = settings.bridgeUrl.trim() !== '';
   const bridgeInsecure = useMemo(
     () => isInsecureBridge(settings.bridgeUrl),
     [settings.bridgeUrl],

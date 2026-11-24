@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { CameraConfig, DvrSettings } from '../lib/types';
 import { DEFAULT_SETTINGS } from '../lib/types';
 import { DEFAULT_CAMERAS } from '../data/defaultCameras';
-import { buildHlsUrl, streamName } from '../lib/rtsp';
+import { buildHlsUrl, readBridgeFromHash, streamName } from '../lib/rtsp';
 
 const SETTINGS_KEY = 'rey-pez-camaras:settings/v1';
 const CAMERAS_KEY = 'rey-pez-camaras:cameras/v1';
@@ -36,9 +36,15 @@ function readCameras(): CameraConfig[] {
  * por cámara (updateCamera) para no re-renderizar todo el mosaico.
  */
 export function useCameras() {
-  const [settings, setSettings] = useState<DvrSettings>(() =>
-    readJson<DvrSettings>(SETTINGS_KEY, DEFAULT_SETTINGS),
-  );
+  const [settings, setSettings] = useState<DvrSettings>(() => {
+    const saved = readJson<DvrSettings>(SETTINGS_KEY, DEFAULT_SETTINGS);
+    // Link de configuración rápida (#puente=https://…ts.net): guarda el
+    // puente en este navegador y limpia la dirección de la barra.
+    const fromLink = readBridgeFromHash(globalThis.location?.hash ?? '');
+    if (!fromLink) return saved;
+    history.replaceState(null, '', location.pathname + location.search);
+    return { ...saved, bridgeUrl: fromLink };
+  });
   const [cameras, setCameras] = useState<CameraConfig[]>(readCameras);
 
   useEffect(() => {

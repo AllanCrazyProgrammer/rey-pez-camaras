@@ -75,6 +75,39 @@ export function isInsecureBridge(
   }
 }
 
+/**
+ * Link de configuración rápida: la dirección del puente va en el "#" de la
+ * URL (el navegador no lo manda a GitHub ni queda en logs). Solo se aceptan
+ * direcciones https de Tailscale (*.ts.net), para que un link ajeno no pueda
+ * apuntar la app a otro servidor.
+ */
+const SETUP_HASH_KEY = 'puente';
+
+export function isTailscaleBridge(bridgeUrl: string): boolean {
+  try {
+    const url = new URL(normalizeBridgeUrl(bridgeUrl));
+    return url.protocol === 'https:' && url.hostname.endsWith('.ts.net');
+  } catch {
+    return false;
+  }
+}
+
+/** Lee el puente de un hash tipo "#puente=https://mac.tailnet.ts.net". */
+export function readBridgeFromHash(hash: string): string | null {
+  const params = new URLSearchParams(hash.replace(/^#/, ''));
+  const raw = params.get(SETUP_HASH_KEY);
+  if (!raw) return null;
+  const normalized = normalizeBridgeUrl(raw);
+  return isTailscaleBridge(normalized) ? normalized : null;
+}
+
+/** Link que, al abrirlo en otro aparato, deja guardado el puente ahí. */
+export function buildSetupLink(pageUrl: string, bridgeUrl: string): string | null {
+  if (!isTailscaleBridge(bridgeUrl)) return null;
+  const base = pageUrl.split('#')[0];
+  return `${base}#${SETUP_HASH_KEY}=${normalizeBridgeUrl(bridgeUrl)}`;
+}
+
 /** URL HLS que sirve go2rtc para un stream. null si no hay puente configurado. */
 export function buildHlsUrl(bridgeUrl: string, stream: string): string | null {
   const base = normalizeBridgeUrl(bridgeUrl);

@@ -1,6 +1,11 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { CameraConfig, DvrSettings } from '../lib/types';
-import { generateGo2rtcYaml, isInsecureBridge, maskRtspUrlSafe } from '../lib/rtsp';
+import {
+  buildSetupLink,
+  generateGo2rtcYaml,
+  isInsecureBridge,
+  maskRtspUrlSafe,
+} from '../lib/rtsp';
 
 interface Props {
   settings: DvrSettings;
@@ -43,8 +48,25 @@ export function SettingsPanel({ settings, updateSettings, cameras, updateCamera 
     URL.revokeObjectURL(url);
   }, [yaml]);
 
-  const configured = settings.dvrIp.trim() !== '' && settings.bridgeUrl.trim() !== '';
+  const hasBridge = settings.bridgeUrl.trim() !== '';
   const insecure = isInsecureBridge(settings.bridgeUrl);
+
+  // Link para dejar el puente guardado en otro aparato con un clic.
+  const setupLink = useMemo(
+    () => buildSetupLink(globalThis.location?.href ?? '', settings.bridgeUrl),
+    [settings.bridgeUrl],
+  );
+  const [linkCopied, setLinkCopied] = useState(false);
+  const copySetupLink = useCallback(async () => {
+    if (!setupLink) return;
+    try {
+      await navigator.clipboard.writeText(setupLink);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      setLinkCopied(false);
+    }
+  }, [setupLink]);
 
   return (
     <section className="panel" aria-label="Ajustes del DVR y cámaras">
@@ -106,12 +128,28 @@ export function SettingsPanel({ settings, updateSettings, cameras, updateCamera 
             <code>http://localhost:1984</code> para probar.
           </p>
         ) : (
-          <p className={configured ? 'ok' : 'warn'}>
-            {configured
-              ? '✓ DVR y puente configurados.'
-              : 'Falta la IP del DVR o la dirección del puente para ver video en vivo.'}
+          <p className={hasBridge ? 'ok' : 'warn'}>
+            {hasBridge
+              ? '✓ Puente configurado: con esto ya se ve el video en este aparato.'
+              : 'Falta la dirección del puente para ver video en vivo.'}
           </p>
         )}
+        {setupLink && (
+          <div className="setup-link">
+            <p className="panel-note">
+              Para ver las cámaras en otro aparato (laptop, celular, pantalla):
+              copia este link y ábrelo ahí, con Tailscale prendido. Deja el
+              puente guardado solo, sin escribir nada.
+            </p>
+            <button type="button" onClick={copySetupLink}>
+              {linkCopied ? '✓ Link copiado' : 'Copiar link para otro aparato'}
+            </button>
+          </div>
+        )}
+        <p className="panel-note">
+          La IP, el usuario y la clave del DVR solo hacen falta en la Mac mini,
+          para generar el go2rtc.yaml.
+        </p>
       </fieldset>
 
       <fieldset>

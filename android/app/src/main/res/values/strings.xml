@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Cámaras Rey Pez</string>
+    <string name="title_activity_main">Cámaras Rey Pez</string>
+    <string name="package_name">com.reypez.camaras</string>
+    <string name="custom_url_scheme">com.reypez.camaras</string>
+</resources>

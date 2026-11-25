@@ -40,6 +40,20 @@ export function useHls(src: string | null, active: boolean): {
     function onPlaying() {
       if (!cancelled) setStatus('playing');
     }
+    // Respaldo: el WebView de Android a veces no avisa "playing" aunque el
+    // video sí avanza. Si el tiempo corre, está en vivo.
+    let firstTime = -1;
+    function onTimeUpdate() {
+      if (!video) return;
+      if (firstTime < 0) firstTime = video.currentTime;
+      // Solo cuenta si ya hay un cuadro de video (readyState ≥ 2): el reloj
+      // puede correr aunque el teléfono no logre decodificar.
+      else if (video.currentTime > firstTime + 0.5 && video.readyState >= 2) {
+        onPlaying();
+        video.removeEventListener('timeupdate', onTimeUpdate);
+      }
+    }
+    video.addEventListener('timeupdate', onTimeUpdate);
     function onVideoError() {
       if (!cancelled) setStatus('error');
     }
@@ -90,6 +104,7 @@ export function useHls(src: string | null, active: boolean): {
     return () => {
       cancelled = true;
       video.removeEventListener('playing', onPlaying);
+      video.removeEventListener('timeupdate', onTimeUpdate);
       video.removeEventListener('error', onVideoError);
       if (hls) hls.destroy();
       video.pause();

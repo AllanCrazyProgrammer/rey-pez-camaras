@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import type { CameraConfig, StreamStatus } from '../lib/types';
 import { useHls } from '../hooks/useHls';
+import { BLANK_POSTER } from '../lib/poster';
 
 const STATUS_LABEL: Record<StreamStatus, string> = {
   idle: 'En pausa',
@@ -110,7 +111,14 @@ export const CameraTile = memo(function CameraTile({
         aria-label={`Ver ${camera.name} en grande`}
       >
         {visible && hlsUrl ? (
-          <video ref={videoRef} muted playsInline autoPlay aria-label={camera.name} />
+          <video
+            ref={videoRef}
+            muted
+            playsInline
+            autoPlay
+            poster={BLANK_POSTER}
+            aria-label={camera.name}
+          />
         ) : (
           <div className="tile-placeholder" aria-hidden="true">
             <span className="tile-placeholder-icon">📷</span>

@@ -9,7 +9,11 @@ lerna-debug.log*
 
 node_modules
 dist
+dist-app
 dist-ssr
+*.apk
+*.keystore
+*.jks
 *.local
 .env
 go2rtc.yaml

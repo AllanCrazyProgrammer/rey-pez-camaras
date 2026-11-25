@@ -6,6 +6,7 @@ const TOUCH_PRIMARY =
   typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 import type { CameraConfig } from '../lib/types';
 import { useHls } from '../hooks/useHls';
+import { BLANK_POSTER } from '../lib/poster';
 import { maskRtspUrlSafe } from '../lib/rtsp';
 import type { DvrSettings } from '../lib/types';
 
@@ -109,6 +110,7 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
               muted
               playsInline
               autoPlay
+              poster={BLANK_POSTER}
               aria-label={camera.name}
             />
           </div>

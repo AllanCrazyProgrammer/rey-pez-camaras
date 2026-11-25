@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sin conexión · Cámaras Rey Pez</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background: #141412; color: #efe9dc; font-family: system-ui, sans-serif; text-align: center; padding: 24px; box-sizing: border-box; }
+  h1 { font-size: 1.3rem; margin: 0 0 8px; }
+  p { color: #a8a294; margin: 0 0 20px; line-height: 1.4; }
+  button { font: inherit; padding: 12px 22px; border-radius: 10px; border: 0; background: #c85a17; color: #fff; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Sin conexión</h1>
+  <p>La app necesita WiFi o datos móviles para abrir.<br />Revisa la conexión y que Tailscale esté prendido.</p>
+  <button type="button" onclick="location.href='https://allancrazyprogrammer.github.io/rey-pez-camaras/'">Reintentar</button>
+</main>
+<script>
+  // Al volver la conexión, reintenta solo.
+  addEventListener('online', function () { location.href = 'https://allancrazyprogrammer.github.io/rey-pez-camaras/'; });
+</script>
+</body>
+</html>

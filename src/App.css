@@ -52,6 +52,19 @@ input, code, pre { font-family: ui-monospace, Consolas, monospace; }
 }
 .app-header h1 { margin: 0; font-size: 1.4rem; text-transform: uppercase; letter-spacing: 0.04em; }
 .app-header p { margin: 4px 0 0; color: var(--muted); font-size: 0.9rem; }
+.tabs .refresh-btn {
+  margin-left: auto; padding: 8px 14px; border-radius: 8px; font: inherit;
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--text); cursor: pointer;
+}
+.tabs .refresh-btn:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+.update-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  margin: 0 0 12px; padding: 10px 14px; border-radius: 10px;
+  background: var(--surface); border: 1px solid var(--ok); color: var(--text);
+}
+.update-banner button {
+  padding: 6px 12px; border-radius: 8px; border: 0; background: var(--ok); color: #10140f; font: inherit; cursor: pointer;
+}
 .header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .install-btn {
   padding: 6px 12px; border-radius: 999px; font: inherit; font-size: 0.85rem;

@@ -5,6 +5,7 @@ import { CameraDetail } from './components/CameraDetail';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { BridgeSetupBanner } from './components/BridgeSetupBanner';
 import { InstallButton } from './components/InstallButton';
+import { useUpdateCheck } from './hooks/useUpdateCheck';
 import type { CameraConfig } from './lib/types';
 import { isInsecureBridge } from './lib/rtsp';
 import './App.css';
@@ -33,6 +34,16 @@ export default function App() {
   } = useCameras();
   const [tab, setTab] = useState<Tab>('grid');
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  // Cambiarlo vuelve a montar los reproductores: reconecta todas las cámaras.
+  const [refreshKey, setRefreshKey] = useState(0);
+  const updateReady = useUpdateCheck();
+
+  // Al volver el WiFi o los datos, reconectar las cámaras solas.
+  useEffect(() => {
+    const onOnline = () => setRefreshKey((k) => k + 1);
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
+  }, []);
 
   const selected = useMemo(
     () => activeCameras.find((c) => c.id === selectedId) ?? null,
@@ -125,7 +136,26 @@ export default function App() {
             {label}
           </button>
         ))}
+        {tab === 'grid' && (
+          <button
+            type="button"
+            className="refresh-btn"
+            onClick={() => setRefreshKey((k) => k + 1)}
+            title="Volver a conectar todas las cámaras"
+          >
+            ⟳ Actualizar cámaras
+          </button>
+        )}
       </nav>
+
+      {updateReady && (
+        <div className="update-banner" role="status">
+          <span>Hay una versión nueva de la app.</span>
+          <button type="button" onClick={() => location.reload()}>
+            Actualizar ahora
+          </button>
+        </div>
+      )}
 
       <main>
         <ErrorBoundary>
@@ -136,7 +166,7 @@ export default function App() {
             {tab === 'grid' &&
               (selected ? (
                 <CameraDetail
-                  key={selected.id}
+                  key={`${selected.id}-${refreshKey}`}
                   camera={selected}
                   settings={settings}
                   hlsUrl={hlsUrlFor(selected, true)}
@@ -146,6 +176,7 @@ export default function App() {
                 />
               ) : (
                 <CameraGrid
+                  key={refreshKey}
                   cameras={activeCameras}
                   gridCols={settings.gridCols}
                   onColsChange={(cols) => updateSettings({ gridCols: cols })}

@@ -1,4 +1,6 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
+import { useDigitalZoom } from '../hooks/useDigitalZoom';
+import { ContextMenu, type MenuItem } from './ContextMenu';
 import type { CameraConfig } from '../lib/types';
 import { useHls } from '../hooks/useHls';
 import { maskRtspUrlSafe } from '../lib/rtsp';
@@ -17,6 +19,9 @@ interface Props {
 export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext }: Props) {
   const { videoRef, status } = useHls(hlsUrl, true);
   const snapshotRef = useRef<HTMLAnchorElement | null>(null);
+  const { containerRef, zoom, zoomed, zoomAtClient, reset, handlers, style } = useDigitalZoom();
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const closeMenu = useCallback(() => setMenu(null), []);
 
   const takeSnapshot = useCallback(() => {
     const video = videoRef.current;
@@ -31,6 +36,27 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
     link.download = `${camera.name.replace(/\s+/g, '-')}-canal-${camera.channel}.png`;
     link.click();
   }, [camera.channel, camera.name, videoRef]);
+
+  const toggleFullscreen = useCallback(() => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void containerRef.current?.requestFullscreen();
+  }, [containerRef]);
+
+  const menuItems: MenuItem[] = menu
+    ? [
+        {
+          label: zoomed ? '🔍 Acercar más' : '🔍 Zoom digital',
+          onSelect: () => zoomAtClient(Math.min(8, zoom.scale * 2), menu.x, menu.y),
+          disabled: zoom.scale >= 8,
+        },
+        { label: '↺ Quitar zoom', onSelect: reset, disabled: !zoomed },
+        { label: '📸 Foto del momento', onSelect: takeSnapshot, disabled: status !== 'playing' },
+        {
+          label: document.fullscreenElement ? '⤢ Salir de pantalla completa' : '⛶ Pantalla completa',
+          onSelect: toggleFullscreen,
+        },
+      ]
+    : [];
 
   return (
     <section className="detail" aria-label={`Vista grande de ${camera.name}`}>
@@ -51,26 +77,53 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
         </div>
       </div>
 
-      <div className="detail-video">
+      <div
+        ref={containerRef}
+        className={`detail-video${zoomed ? ' detail-video--zoomed' : ''}`}
+        onContextMenu={(e) => {
+          if (!hlsUrl) return;
+          e.preventDefault();
+          setMenu({ x: e.clientX, y: e.clientY });
+        }}
+        onDoubleClick={(e) => {
+          if (!(e.target as HTMLElement).closest('.context-menu')) reset();
+        }}
+        onPointerDown={(e) => {
+          if (!(e.target as HTMLElement).closest('.context-menu')) handlers.onPointerDown(e);
+        }}
+        onPointerMove={handlers.onPointerMove}
+        onPointerUp={handlers.onPointerUp}
+        onPointerCancel={handlers.onPointerCancel}
+      >
         {hlsUrl ? (
-          // crossOrigin: pide el video con CORS (go2rtc trae origin "*") para
-          // que la "Foto del momento" pueda leer el cuadro. Sin esto, con HLS
-          // nativo (Safari, Chrome nuevo) el canvas queda bloqueado.
-          <video
-            ref={videoRef}
-            crossOrigin="anonymous"
-            muted
-            playsInline
-            autoPlay
-            controls
-            aria-label={camera.name}
-          />
+          <div className="zoom-layer" style={style}>
+            {/* crossOrigin: pide el video con CORS (go2rtc trae origin "*") para
+                que la "Foto del momento" pueda leer el cuadro. Sin controles
+                nativos: chocaban con el zoom; pantalla completa va en el menú. */}
+            <video
+              ref={videoRef}
+              crossOrigin="anonymous"
+              muted
+              playsInline
+              autoPlay
+              aria-label={camera.name}
+            />
+          </div>
         ) : (
           <div className="detail-no-signal">
             <p>Sin puente configurado</p>
             <p>Pon la dirección del puente en Ajustes para ver el video en vivo.</p>
           </div>
         )}
+        {zoomed ? (
+          <span className="zoom-hint">
+            Zoom ×{zoom.scale.toFixed(1)} · rueda acerca/aleja · arrastra para mover · doble
+            clic para salir
+          </span>
+        ) : (
+          hlsUrl && <span className="zoom-hint zoom-hint--idle">Clic derecho: menú</span>
+        )}
+        {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={closeMenu} />}
         <span className={`tile-status tile-status--${status}`}>
           {status === 'playing'
             ? 'En vivo · principal'

@@ -9,6 +9,7 @@ interface Props {
   hlsUrlFor: (camera: CameraConfig, main: boolean) => string | null;
   onSelect: (camera: CameraConfig) => void;
   onRename: (id: number, name: string) => void;
+  onMove: (fromId: number, toId: number) => void;
 }
 
 export function CameraGrid({
@@ -18,6 +19,7 @@ export function CameraGrid({
   hlsUrlFor,
   onSelect,
   onRename,
+  onMove,
 }: Props) {
   // useCallback estable: los tiles memoizados no se re-renderizan por
   // una función nueva en cada render del padre.
@@ -34,7 +36,7 @@ export function CameraGrid({
     <section aria-label="Mosaico de cámaras">
       <div className="grid-toolbar">
         <span>
-          {cameras.length} cámaras · substream (ahorra ancho de banda)
+          {cameras.length} cámaras · arrastra para acomodarlas · espacio recarga
         </span>
         <div className="grid-cols" role="group" aria-label="Columnas del mosaico">
           {([2, 3, 4] as const).map((cols) => (
@@ -57,6 +59,7 @@ export function CameraGrid({
             hlsUrl={hlsUrlFor(camera, false)}
             onSelect={handleSelect}
             onRename={onRename}
+            onMove={onMove}
           />
         ))}
       </div>

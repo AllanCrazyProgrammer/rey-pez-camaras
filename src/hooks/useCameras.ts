@@ -6,6 +6,7 @@ import { buildHlsUrl, readBridgeFromHash, streamName } from '../lib/rtsp';
 import {
   fetchSharedNames,
   mergeShared,
+  moveCameraInList,
   saveSharedNames,
   type NamesSyncStatus,
 } from '../lib/namesSync';
@@ -147,6 +148,15 @@ export function useCameras() {
     );
   }, []);
 
+  /** Arrastrar y soltar en el mosaico: se guarda en la Mac mini para todos. */
+  const moveCamera = useCallback((fromId: number, toId: number) => {
+    setCameras((prev) => {
+      const next = moveCameraInList(prev, fromId, toId);
+      if (next !== prev) dirtyRef.current = true;
+      return next;
+    });
+  }, []);
+
   /** URL HLS de una cámara: substream en mosaico, principal en vista grande. */
   const hlsUrlFor = useCallback(
     (camera: CameraConfig, main: boolean): string | null =>
@@ -162,6 +172,7 @@ export function useCameras() {
     cameras,
     activeCameras,
     updateCamera,
+    moveCamera,
     hlsUrlFor,
     // Sin puente no hay Mac mini con quien sincronizar.
     namesStatus: settings.bridgeUrl.trim() ? namesStatus : ('local' as const),

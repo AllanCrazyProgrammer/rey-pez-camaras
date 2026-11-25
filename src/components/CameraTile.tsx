@@ -18,7 +18,12 @@ interface Props {
   onSelect: (camera: CameraConfig) => void;
   /** Cambia el nombre de la cámara (se comparte vía la Mac mini). */
   onRename: (id: number, name: string) => void;
+  /** Soltar otra cámara encima de esta: la movida toma este lugar. */
+  onMove: (fromId: number, toId: number) => void;
 }
+
+/** Tipo propio en dataTransfer para no confundir con texto o archivos. */
+const DRAG_TYPE = 'application/x-rey-pez-camara';
 
 /**
  * Una baldosa del mosaico. `memo` evita que se vuelva a renderizar
@@ -31,12 +36,15 @@ export const CameraTile = memo(function CameraTile({
   hlsUrl,
   onSelect,
   onRename,
+  onMove,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [visible, setVisible] = useState(false);
   const { videoRef, status } = useHls(hlsUrl, visible);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(camera.name);
+  const [dragging, setDragging] = useState(false);
+  const [dropTarget, setDropTarget] = useState(false);
 
   const startEdit = () => {
     setDraft(camera.name);
@@ -60,7 +68,33 @@ export const CameraTile = memo(function CameraTile({
   }, []);
 
   return (
-    <div ref={containerRef} className="tile">
+    <div
+      ref={containerRef}
+      className={`tile${dragging ? ' tile--dragging' : ''}${dropTarget ? ' tile--drop' : ''}`}
+      draggable={!editing}
+      title="Arrastra para acomodar"
+      onDragStart={(e) => {
+        e.dataTransfer.setData(DRAG_TYPE, String(camera.id));
+        e.dataTransfer.effectAllowed = 'move';
+        setDragging(true);
+      }}
+      onDragEnd={() => setDragging(false)}
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (!dropTarget) setDropTarget(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropTarget(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDropTarget(false);
+        const fromId = Number(e.dataTransfer.getData(DRAG_TYPE));
+        if (fromId && fromId !== camera.id) onMove(fromId, camera.id);
+      }}
+    >
       <button
         type="button"
         className="tile-video-btn"

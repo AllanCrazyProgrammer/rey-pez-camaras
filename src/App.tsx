@@ -25,6 +25,7 @@ export default function App() {
     cameras,
     activeCameras,
     updateCamera,
+    moveCamera,
     hlsUrlFor,
     namesStatus,
   } = useCameras();
@@ -127,6 +128,7 @@ export default function App() {
             {tab === 'grid' &&
               (selected ? (
                 <CameraDetail
+                  key={selected.id}
                   camera={selected}
                   settings={settings}
                   hlsUrl={hlsUrlFor(selected, true)}
@@ -142,6 +144,7 @@ export default function App() {
                   hlsUrlFor={hlsUrlFor}
                   onSelect={handleSelect}
                   onRename={handleRename}
+                  onMove={moveCamera}
                 />
               ))}
             {tab === 'settings' && (

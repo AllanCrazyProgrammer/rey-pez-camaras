@@ -101,6 +101,19 @@ export function readBridgeFromHash(hash: string): string | null {
   return isTailscaleBridge(normalized) ? normalized : null;
 }
 
+/**
+ * Lo que la persona pegue para configurar el puente: el link completo
+ * (…#puente=https://…ts.net) o solo la dirección https://…ts.net.
+ */
+export function bridgeFromPasted(text: string): string | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  const hashAt = trimmed.indexOf('#');
+  if (hashAt !== -1) return readBridgeFromHash(trimmed.slice(hashAt));
+  const normalized = normalizeBridgeUrl(trimmed);
+  return isTailscaleBridge(normalized) ? normalized : null;
+}
+
 /** Link que, al abrirlo en otro aparato, deja guardado el puente ahí. */
 export function buildSetupLink(pageUrl: string, bridgeUrl: string): string | null {
   if (!isTailscaleBridge(bridgeUrl)) return null;

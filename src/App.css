@@ -25,7 +25,26 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 }
 input, code, pre { font-family: ui-monospace, Consolas, monospace; }
 
-.app { max-width: 1400px; margin: 0 auto; padding: 16px; }
+.app {
+  max-width: 1400px; margin: 0 auto;
+  /* App instalada en iPhone: no meterse bajo la muesca ni la barra de inicio. */
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
+.bridge-setup {
+  background: var(--surface); border: 1px solid var(--warn); border-radius: 10px;
+  padding: 12px 14px; margin-bottom: 12px;
+}
+.bridge-setup p { margin: 0 0 8px; }
+.bridge-setup .row { display: flex; gap: 8px; flex-wrap: wrap; }
+.bridge-setup input {
+  flex: 1; min-width: 220px; padding: 8px 10px; border-radius: 8px; font: inherit;
+  border: 1px solid var(--border); background: var(--bg); color: var(--text);
+}
+.bridge-setup button {
+  padding: 8px 14px; border-radius: 8px; border: 1px solid var(--accent);
+  background: var(--accent); color: #fff; font: inherit;
+}
 .app-header {
   display: flex; justify-content: space-between; align-items: flex-start;
   gap: 12px; flex-wrap: wrap; padding-bottom: 12px;

@@ -3,6 +3,7 @@ import { useCameras } from './hooks/useCameras';
 import { CameraGrid } from './components/CameraGrid';
 import { CameraDetail } from './components/CameraDetail';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { BridgeSetupBanner } from './components/BridgeSetupBanner';
 import type { CameraConfig } from './lib/types';
 import { isInsecureBridge } from './lib/rtsp';
 import './App.css';
@@ -125,6 +126,9 @@ export default function App() {
       <main>
         <ErrorBoundary>
           <Suspense fallback={<p className="loading">Cargando…</p>}>
+            {tab === 'grid' && !bridgeOk && (
+              <BridgeSetupBanner onSave={(bridgeUrl) => updateSettings({ bridgeUrl })} />
+            )}
             {tab === 'grid' &&
               (selected ? (
                 <CameraDetail

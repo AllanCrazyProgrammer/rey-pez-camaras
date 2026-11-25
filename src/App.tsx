@@ -6,7 +6,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { BridgeSetupBanner } from './components/BridgeSetupBanner';
 import { InstallButton } from './components/InstallButton';
 import { useUpdateCheck } from './hooks/useUpdateCheck';
-import type { CameraConfig } from './lib/types';
+import type { CameraConfig, DvrKind } from './lib/types';
 import { isInsecureBridge } from './lib/rtsp';
 import './App.css';
 
@@ -21,6 +21,20 @@ const BridgeGuide = lazy(() =>
 
 type Tab = 'grid' | 'settings' | 'guide';
 
+const DVR_TAB_KEY = 'rey-pez-camaras:dvr-tab/v1';
+const DVR_TABS: [DvrKind, string][] = [
+  ['dahua', 'Dahua'],
+  ['hik', 'Hikvision'],
+];
+
+function readDvrTab(): DvrKind {
+  try {
+    return localStorage.getItem(DVR_TAB_KEY) === 'hik' ? 'hik' : 'dahua';
+  } catch {
+    return 'dahua';
+  }
+}
+
 export default function App() {
   const {
     settings,
@@ -34,6 +48,19 @@ export default function App() {
   } = useCameras();
   const [tab, setTab] = useState<Tab>('grid');
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  // Pestaña de DVR del mosaico: cada aparato recuerda la última que vio.
+  const [dvrTab, setDvrTab] = useState<DvrKind>(readDvrTab);
+  useEffect(() => {
+    try {
+      localStorage.setItem(DVR_TAB_KEY, dvrTab);
+    } catch {
+      /* sin storage: solo dura esta visita */
+    }
+  }, [dvrTab]);
+  const tabCameras = useMemo(
+    () => activeCameras.filter((c) => c.dvr === dvrTab),
+    [activeCameras, dvrTab],
+  );
   // Cambiarlo vuelve a montar los reproductores: reconecta todas las cámaras.
   const [refreshKey, setRefreshKey] = useState(0);
   const updateReady = useUpdateCheck();
@@ -77,13 +104,14 @@ export default function App() {
     (dir: 1 | -1) => {
       setSelectedId((current) => {
         if (current === null) return current;
-        const idx = activeCameras.findIndex((c) => c.id === current);
+        // Anterior / siguiente sin salir de la pestaña de su DVR.
+        const idx = tabCameras.findIndex((c) => c.id === current);
         if (idx === -1) return current;
-        const next = activeCameras[(idx + dir + activeCameras.length) % activeCameras.length];
+        const next = tabCameras[(idx + dir + tabCameras.length) % tabCameras.length];
         return next.id;
       });
     },
-    [activeCameras],
+    [tabCameras],
   );
 
   // Para ver video solo hace falta el puente; la IP del DVR solo sirve
@@ -163,6 +191,25 @@ export default function App() {
             {tab === 'grid' && !bridgeOk && (
               <BridgeSetupBanner onSave={(bridgeUrl) => updateSettings({ bridgeUrl })} />
             )}
+            {tab === 'grid' && !selected && (
+              <div className="dvr-tabs" role="tablist" aria-label="DVR">
+                {DVR_TABS.map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="tab"
+                    aria-selected={dvrTab === id}
+                    className={dvrTab === id ? 'tab-active' : ''}
+                    onClick={() => setDvrTab(id)}
+                  >
+                    {label}{' '}
+                    <span className="dvr-tab-count">
+                      {activeCameras.filter((c) => c.dvr === id).length}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
             {tab === 'grid' &&
               (selected ? (
                 <CameraDetail
@@ -176,8 +223,8 @@ export default function App() {
                 />
               ) : (
                 <CameraGrid
-                  key={refreshKey}
-                  cameras={activeCameras}
+                  key={`${dvrTab}-${refreshKey}`}
+                  cameras={tabCameras}
                   gridCols={settings.gridCols}
                   onColsChange={(cols) => updateSettings({ gridCols: cols })}
                   hlsUrlFor={hlsUrlFor}

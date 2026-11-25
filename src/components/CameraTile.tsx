@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useState } from 'react';
 import type { CameraConfig, StreamStatus } from '../lib/types';
 import { useHls } from '../hooks/useHls';
 import { BLANK_POSTER } from '../lib/poster';
@@ -38,8 +38,8 @@ const TOUCH_PRIMARY =
 /**
  * Una baldosa del mosaico. `memo` evita que se vuelva a renderizar
  * cuando cambia otra cámara: solo re-renderiza si cambian sus props.
- * El player solo se monta cuando la baldosa es visible en pantalla
- * (IntersectionObserver), así 14 cámaras no abren 14 streams a la vez.
+ * Todas las cámaras de la pestaña reproducen a la vez, aunque estén
+ * fuera de la pantalla: al hacer scroll ya están en vivo.
  */
 export const CameraTile = memo(function CameraTile({
   camera,
@@ -48,9 +48,7 @@ export const CameraTile = memo(function CameraTile({
   onRename,
   onMove,
 }: Props) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [visible, setVisible] = useState(false);
-  const { videoRef, status } = useHls(hlsUrl, visible);
+  const { videoRef, status } = useHls(hlsUrl, true);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(camera.name);
   const [dragging, setDragging] = useState(false);
@@ -66,20 +64,8 @@ export const CameraTile = memo(function CameraTile({
     setEditing(false);
   };
 
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setVisible(entry.isIntersecting),
-      { rootMargin: '200px' },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
   return (
     <div
-      ref={containerRef}
       className={`tile${dragging ? ' tile--dragging' : ''}${dropTarget ? ' tile--drop' : ''}`}
       data-camera-id={camera.id}
       draggable={!editing && !TOUCH_PRIMARY}
@@ -112,7 +98,7 @@ export const CameraTile = memo(function CameraTile({
         onClick={() => onSelect(camera)}
         aria-label={`Ver ${camera.name} en grande`}
       >
-        {visible && hlsUrl ? (
+        {hlsUrl ? (
           <video
             ref={videoRef}
             muted

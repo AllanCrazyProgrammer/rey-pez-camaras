@@ -90,6 +90,22 @@ input, code, pre { font-family: ui-monospace, Consolas, monospace; }
 }
 .tabs button.tab-active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
+/* Pestañas Dahua / Hikvision del mosaico */
+.dvr-tabs {
+  display: flex; gap: 4px; margin: 0 0 12px; padding: 4px; width: fit-content; max-width: 100%;
+  border-radius: 10px; background: var(--surface); border: 1px solid var(--border);
+}
+.dvr-tabs button {
+  padding: 8px 18px; border-radius: 7px; border: 0; font: inherit; font-weight: 600;
+  background: transparent; color: var(--muted); cursor: pointer;
+}
+.dvr-tabs button:hover { color: var(--text); }
+.dvr-tabs button.tab-active { background: var(--accent); color: #fff; }
+.dvr-tab-count {
+  display: inline-block; min-width: 1.6em; margin-left: 4px; padding: 0 6px; border-radius: 999px;
+  font-size: 0.8rem; background: rgba(0, 0, 0, 0.25);
+}
+
 .grid-toolbar {
   display: flex; justify-content: space-between; align-items: center;
   gap: 12px; flex-wrap: wrap; margin-bottom: 12px; color: var(--muted); font-size: 0.9rem;

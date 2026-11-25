@@ -7,7 +7,8 @@ import type { CameraConfig } from '../lib/types';
  */
 export const HIK_ID_OFFSET = 100;
 
-/** Canales del Hikvision sin cámara (NO VIDEO): ocultos de inicio. */
+/** Canales sin imagen: ocultos de inicio (se activan en Ajustes). */
+const DAHUA_HIDDEN = new Set([4, 14]);
 const HIK_HIDDEN = new Set([5, 14, 16]);
 
 const dahua: CameraConfig[] = Array.from({ length: 16 }, (_, i) => ({
@@ -16,7 +17,7 @@ const dahua: CameraConfig[] = Array.from({ length: 16 }, (_, i) => ({
   channel: i + 1,
   name: `Cámara ${i + 1}`,
   location: 'Bodega',
-  enabled: true,
+  enabled: !DAHUA_HIDDEN.has(i + 1),
 }));
 
 const hik: CameraConfig[] = Array.from({ length: 16 }, (_, i) => ({

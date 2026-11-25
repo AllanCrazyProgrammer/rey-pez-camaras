@@ -91,7 +91,15 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
           setMenu({ x: e.clientX, y: e.clientY });
         }}
         onDoubleClick={(e) => {
-          if (!(e.target as HTMLElement).closest('.context-menu')) reset();
+          if ((e.target as HTMLElement).closest('.context-menu')) return;
+          // Con zoom: doble clic quita el zoom. Sin zoom (escritorio):
+          // regresa al mosaico, saliendo antes de pantalla completa.
+          if (zoomed || TOUCH_PRIMARY) {
+            reset();
+            return;
+          }
+          if (document.fullscreenElement) void document.exitFullscreen();
+          onClose();
         }}
         onPointerDown={(e) => {
           if (!(e.target as HTMLElement).closest('.context-menu')) handlers.onPointerDown(e);
@@ -131,7 +139,7 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
         ) : (
           hlsUrl && (
             <span className="zoom-hint zoom-hint--idle">
-              {TOUCH_PRIMARY ? 'Pellizca para zoom' : 'Clic derecho: menú'}
+              {TOUCH_PRIMARY ? 'Pellizca para zoom' : 'Clic derecho: menú · doble clic: mosaico'}
             </span>
           )
         )}

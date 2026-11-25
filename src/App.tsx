@@ -21,6 +21,8 @@ const BridgeGuide = lazy(() =>
 
 type Tab = 'grid' | 'settings' | 'guide';
 
+/** Marca en history.state de que está abierta la vista grande. */
+const CAMERA_STATE = 'reyPezCamara';
 const DVR_TAB_KEY = 'rey-pez-camaras:dvr-tab/v1';
 const DVR_TABS: [DvrKind, string][] = [
   ['dahua', 'Dahua'],
@@ -96,8 +98,26 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // Vista grande = una entrada en el historial. Así "atrás" (botón del
+  // navegador o el de Android en la APK) regresa al mosaico en vez de
+  // salir de la app.
+  useEffect(() => {
+    // Al recargar, el historial puede traer la marca vieja: se limpia.
+    if (history.state?.[CAMERA_STATE]) history.replaceState(null, '');
+    const onPop = () => setSelectedId(null);
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
   const handleSelect = useCallback((camera: CameraConfig) => {
     setSelectedId(camera.id);
+    if (!history.state?.[CAMERA_STATE]) history.pushState({ [CAMERA_STATE]: true }, '');
+  }, []);
+
+  const closeCamera = useCallback(() => {
+    // history.back() dispara popstate, que cierra la vista grande.
+    if (history.state?.[CAMERA_STATE]) history.back();
+    else setSelectedId(null);
   }, []);
 
   const step = useCallback(
@@ -158,7 +178,7 @@ export default function App() {
             className={tab === id ? 'tab-active' : ''}
             onClick={() => {
               setTab(id);
-              setSelectedId(null);
+              closeCamera();
             }}
           >
             {label}
@@ -217,7 +237,7 @@ export default function App() {
                   camera={selected}
                   settings={settings}
                   hlsUrl={hlsUrlFor(selected, true)}
-                  onClose={() => setSelectedId(null)}
+                  onClose={closeCamera}
                   onPrev={() => step(-1)}
                   onNext={() => step(1)}
                 />

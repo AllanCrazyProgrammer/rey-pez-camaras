@@ -9,6 +9,7 @@ import { useHls } from '../hooks/useHls';
 import { BLANK_POSTER } from '../lib/poster';
 import { maskRtspUrlSafe } from '../lib/rtsp';
 import type { DvrSettings } from '../lib/types';
+import { channelLabel } from '../data/defaultCameras';
 
 interface Props {
   camera: CameraConfig;
@@ -37,9 +38,9 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
     const link = snapshotRef.current;
     if (!link) return;
     link.href = canvas.toDataURL('image/png');
-    link.download = `${camera.name.replace(/\s+/g, '-')}-canal-${camera.channel}.png`;
+    link.download = `${camera.name.replace(/\s+/g, '-')}-${camera.dvr}-${camera.channel}.png`;
     link.click();
-  }, [camera.channel, camera.name, videoRef]);
+  }, [camera.channel, camera.dvr, camera.name, videoRef]);
 
   const toggleFullscreen = useCallback(() => {
     if (document.fullscreenElement) void document.exitFullscreen();
@@ -69,7 +70,7 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
           ← Mosaico
         </button>
         <h2>
-          {camera.name} <span>· {camera.location} · Canal {camera.channel}</span>
+          {camera.name} <span>· {camera.location} · {channelLabel(camera)}</span>
         </h2>
         <div className="detail-nav">
           <button type="button" onClick={onPrev} aria-label="Cámara anterior">
@@ -157,7 +158,7 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
         <a ref={snapshotRef} href="#snapshot" className="hidden" aria-hidden="true" tabIndex={-1}>
           descarga
         </a>
-        <code className="rtsp-line">{maskRtspUrlSafe(settings, camera.channel, 0)}</code>
+        <code className="rtsp-line">{maskRtspUrlSafe(settings, camera, 0)}</code>
       </div>
     </section>
   );

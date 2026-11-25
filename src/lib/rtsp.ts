@@ -1,34 +1,55 @@
 import type { CameraConfig, DvrSettings } from './types';
 
+type CamRef = Pick<CameraConfig, 'dvr' | 'channel'>;
+
 /**
- * URLs RTSP del Dahua DH-XVR1B16H-I/T (verificado en DahuaWiki / docs Dahua).
- * Principal: subtype=0 · Substream (para mosaico): subtype=1.
- * El navegador NO puede reproducir RTSP directo: el puente go2rtc de la
- * bodega lo convierte a HLS/WebRTC y la app consume ese HLS.
+ * URLs RTSP de los dos DVR (el navegador no puede reproducir RTSP: el
+ * puente go2rtc de la bodega lo convierte a HLS y la app consume ese HLS).
+ * - Dahua DH-XVR1B16H-I/T: /cam/realmonitor?channel=N&subtype=0|1
+ * - Hikvision DS-7216HQHI-K1: /Streaming/Channels/N01 (principal) y N02 (sub)
+ * subtype 0 = principal (vista grande) · 1 = substream (mosaico).
  */
-export function buildRtspUrl(
-  settings: DvrSettings,
-  channel: number,
-  subtype: 0 | 1,
-): string {
-  const { username, password, dvrIp } = settings;
-  const host = dvrIp.trim() || '<IP-DEL-DVR>';
-  const user = username.trim() || 'admin';
+function rtspParts(settings: DvrSettings, cam: CamRef) {
+  if (cam.dvr === 'hik') {
+    return {
+      host: settings.hikIp.trim() || '<IP-DEL-HIKVISION>',
+      user: settings.hikUsername.trim() || 'admin',
+      password: settings.hikPassword,
+    };
+  }
+  return {
+    host: settings.dvrIp.trim() || '<IP-DEL-DVR>',
+    user: settings.username.trim() || 'admin',
+    password: settings.password,
+  };
+}
+
+function rtspPath(cam: CamRef, subtype: 0 | 1): string {
+  return cam.dvr === 'hik'
+    ? `/Streaming/Channels/${cam.channel}0${subtype + 1}`
+    : `/cam/realmonitor?channel=${cam.channel}&subtype=${subtype}`;
+}
+
+export function buildRtspUrl(settings: DvrSettings, cam: CamRef, subtype: 0 | 1): string {
+  const { host, user, password } = rtspParts(settings, cam);
   const pass = password ? encodeURIComponent(password) : '<CLAVE>';
-  return `rtsp://${user}:${pass}@${host}:554/cam/realmonitor?channel=${channel}&subtype=${subtype}`;
+  return `rtsp://${user}:${pass}@${host}:554${rtspPath(cam, subtype)}`;
 }
 
 /** Misma URL con la clave tapada, segura para mostrar en pantalla. */
-export function maskRtspUrlSafe(settings: DvrSettings, channel: number, subtype: 0 | 1): string {
+export function maskRtspUrlSafe(settings: DvrSettings, cam: CamRef, subtype: 0 | 1): string {
   // Construir la versión enmascarada sin pasar por la clave real.
-  const host = settings.dvrIp.trim() || '<IP-DEL-DVR>';
-  const user = settings.username.trim() || 'admin';
-  return `rtsp://${user}:••••@${host}:554/cam/realmonitor?channel=${channel}&subtype=${subtype}`;
+  const { host, user } = rtspParts(settings, cam);
+  return `rtsp://${user}:••••@${host}:554${rtspPath(cam, subtype)}`;
 }
 
-/** Nombre del stream en go2rtc: cam1 (principal), cam1sub (substream). */
-export function streamName(channel: number, main: boolean): string {
-  return main ? `cam${channel}` : `cam${channel}sub`;
+/**
+ * Nombre del stream en go2rtc: cam1 / cam1sub (Dahua), hik1 / hik1sub
+ * (Hikvision).
+ */
+export function streamName(cam: CamRef, main: boolean): string {
+  const base = `${cam.dvr === 'hik' ? 'hik' : 'cam'}${cam.channel}`;
+  return main ? base : `${base}sub`;
 }
 
 /** Hosts que el navegador trata como seguros aunque vayan por http://. */
@@ -138,11 +159,13 @@ export function generateGo2rtcYaml(
   settings: DvrSettings,
   cameras: CameraConfig[],
 ): string {
-  const active = cameras.filter((c) => c.enabled);
+  // El Hikvision solo entra si ya tiene IP: con un marcador go2rtc fallaría.
+  const hasHik = settings.hikIp.trim() !== '';
+  const active = cameras.filter((c) => c.enabled && (c.dvr === 'dahua' || hasHik));
   const lines: string[] = [
-    '# go2rtc.yaml — Rey Pez / Bodega (Dahua DH-XVR1B16H-I/T)',
+    '# go2rtc.yaml — Rey Pez / Bodega (Dahua DH-XVR1B16H-I/T + Hikvision DS-7216HQHI-K1)',
     '# Pegar en la Mac mini (puente) junto al binario de go2rtc.',
-    '# NO subir este archivo a GitHub: lleva la clave del DVR.',
+    '# NO subir este archivo a GitHub: lleva las claves de los DVR.',
     '# Docs: https://github.com/AlexxIT/go2rtc',
     '#',
     '# Para verlo desde la web (https) sin que el navegador lo bloquee:',
@@ -152,8 +175,8 @@ export function generateGo2rtcYaml(
     'streams:',
   ];
   for (const cam of active) {
-    lines.push(`  ${streamName(cam.channel, true)}: ${buildRtspUrl(settings, cam.channel, 0)}`);
-    lines.push(`  ${streamName(cam.channel, false)}: ${buildRtspUrl(settings, cam.channel, 1)}`);
+    lines.push(`  ${streamName(cam, true)}: ${buildRtspUrl(settings, cam, 0)}`);
+    lines.push(`  ${streamName(cam, false)}: ${buildRtspUrl(settings, cam, 1)}`);
   }
   lines.push('', 'api:');
   // Solo escucha en la propia Mac mini; Tailscale Serve lo publica con
@@ -161,6 +184,9 @@ export function generateGo2rtcYaml(
   lines.push('  listen: "127.0.0.1:1984"');
   // CORS: permite que la web (github.io) lea el video del puente.
   lines.push('  origin: "*"');
+  // RTSP y WebRTC de go2rtc tampoco se abren a la red.
+  lines.push('', 'rtsp:', '  listen: "127.0.0.1:8554"');
+  lines.push('', 'webrtc:', '  listen: "127.0.0.1:8555"');
   lines.push('');
   return lines.join('\n');
 }

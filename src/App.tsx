@@ -99,7 +99,7 @@ export default function App() {
       <header className="app-header">
         <div>
           <h1>Cámaras · Bodega Rey Pez</h1>
-          <p>Dahua DH-XVR1B16H-I/T · {activeCameras.length} cámaras · solo Dahua</p>
+          <p>Dahua + Hikvision · {activeCameras.length} cámaras</p>
         </div>
         <div className="header-actions">
         <InstallButton />

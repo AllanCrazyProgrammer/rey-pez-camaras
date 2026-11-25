@@ -2,6 +2,7 @@ import { memo, useEffect, useRef, useState } from 'react';
 import type { CameraConfig, StreamStatus } from '../lib/types';
 import { useHls } from '../hooks/useHls';
 import { BLANK_POSTER } from '../lib/poster';
+import { channelLabel } from '../data/defaultCameras';
 
 const STATUS_LABEL: Record<StreamStatus, string> = {
   idle: 'En pausa',
@@ -136,7 +137,7 @@ export const CameraTile = memo(function CameraTile({
             value={draft}
             maxLength={60}
             autoFocus
-            aria-label={`Nombre de la cámara ${camera.channel}`}
+            aria-label={`Nombre de la cámara ${channelLabel(camera)}`}
             onChange={(e) => setDraft(e.target.value)}
             onFocus={(e) => e.target.select()}
             onBlur={commit}
@@ -160,7 +161,7 @@ export const CameraTile = memo(function CameraTile({
           </div>
         )}
         <span>
-          {camera.location} · Canal {camera.channel}
+          {camera.location} · {channelLabel(camera)}
         </span>
       </div>
     </div>

@@ -33,10 +33,19 @@ function readCameras(): CameraConfig[] {
   try {
     const raw = localStorage.getItem(CAMERAS_KEY);
     if (!raw) return DEFAULT_CAMERAS;
-    const parsed = JSON.parse(raw) as CameraConfig[];
+    const parsed = JSON.parse(raw) as Partial<CameraConfig>[];
     if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_CAMERAS;
-    // Solo se aceptan canales 1..16 del XVR; el resto se ignora.
-    return parsed.filter((c) => c.channel >= 1 && c.channel <= 16);
+    const byId = new Map(DEFAULT_CAMERAS.map((c) => [c.id, c]));
+    // Solo cámaras conocidas (Dahua 1..16, Hikvision 101..116). Las listas
+    // guardadas antes de agregar el Hikvision no traían `dvr`: se toma de
+    // la lista base, que manda en dvr y canal.
+    const saved = parsed.flatMap((c) => {
+      const base = typeof c?.id === 'number' ? byId.get(c.id) : undefined;
+      return base ? [{ ...base, ...c, dvr: base.dvr, channel: base.channel }] : [];
+    });
+    // Cámaras nuevas (ej. Dahua 15-16 y el Hikvision) se agregan al final.
+    const known = new Set(saved.map((c) => c.id));
+    return [...saved, ...DEFAULT_CAMERAS.filter((c) => !known.has(c.id))];
   } catch {
     return DEFAULT_CAMERAS;
   }
@@ -160,7 +169,7 @@ export function useCameras() {
   /** URL HLS de una cámara: substream en mosaico, principal en vista grande. */
   const hlsUrlFor = useCallback(
     (camera: CameraConfig, main: boolean): string | null =>
-      buildHlsUrl(settings.bridgeUrl, streamName(camera.channel, main)),
+      buildHlsUrl(settings.bridgeUrl, streamName(camera, main)),
     [settings.bridgeUrl],
   );
 

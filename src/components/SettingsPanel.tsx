@@ -7,6 +7,7 @@ import {
   isInsecureBridge,
   maskRtspUrlSafe,
 } from '../lib/rtsp';
+import { channelLabel } from '../data/defaultCameras';
 
 interface Props {
   settings: DvrSettings;
@@ -169,6 +170,43 @@ export function SettingsPanel({
       </fieldset>
 
       <fieldset>
+        <legend>DVR Hikvision DS-7216HQHI-K1</legend>
+        <label>
+          IP local del Hikvision
+          <input
+            type="text"
+            inputMode="numeric"
+            placeholder="192.168.1.x"
+            value={settings.hikIp}
+            onChange={(e) => updateSettings({ hikIp: e.target.value })}
+            autoComplete="off"
+          />
+        </label>
+        <label>
+          Usuario
+          <input
+            type="text"
+            value={settings.hikUsername}
+            onChange={(e) => updateSettings({ hikUsername: e.target.value })}
+            autoComplete="off"
+          />
+        </label>
+        <label>
+          Clave
+          <input
+            type="password"
+            value={settings.hikPassword}
+            onChange={(e) => updateSettings({ hikPassword: e.target.value })}
+            autoComplete="off"
+          />
+        </label>
+        <p className="panel-note">
+          Igual que el Dahua: solo hace falta en la Mac mini para el
+          go2rtc.yaml. Sin IP, el Hikvision no entra en el archivo.
+        </p>
+      </fieldset>
+
+      <fieldset>
         <legend>Cámaras ({cameras.length})</legend>
         <p className={namesStatus === 'synced' ? 'ok' : namesStatus === 'error' ? 'warn' : 'panel-note'}>
           {NAMES_STATUS_TEXT[namesStatus]}
@@ -186,26 +224,26 @@ export function SettingsPanel({
                   onChange={(e) => updateCamera(cam.id, { enabled: e.target.checked })}
                   aria-label={`Activar ${cam.name}`}
                 />
-                <span>Canal {cam.channel}</span>
+                <span>{channelLabel(cam)}</span>
               </label>
               <label>
-                <span className="sr-only">Nombre de la cámara {cam.channel}</span>
+                <span className="sr-only">Nombre de la cámara {channelLabel(cam)}</span>
                 <input
                   type="text"
                   value={cam.name}
                   maxLength={60}
                   onChange={(e) => updateCamera(cam.id, { name: e.target.value })}
-                  aria-label={`Nombre de la cámara ${cam.channel}`}
+                  aria-label={`Nombre de la cámara ${channelLabel(cam)}`}
                 />
               </label>
               <label>
-                <span className="sr-only">Ubicación de la cámara {cam.channel}</span>
+                <span className="sr-only">Ubicación de la cámara {channelLabel(cam)}</span>
                 <input
                   type="text"
                   value={cam.location}
                   maxLength={60}
                   onChange={(e) => updateCamera(cam.id, { location: e.target.value })}
-                  aria-label={`Ubicación de la cámara ${cam.channel}`}
+                  aria-label={`Ubicación de la cámara ${channelLabel(cam)}`}
                 />
               </label>
             </li>
@@ -223,8 +261,8 @@ export function SettingsPanel({
                 <strong>
                   {cam.name} · {cam.location}
                 </strong>
-                <code>{maskRtspUrlSafe(settings, cam.channel, 0)}</code>
-                <code>{maskRtspUrlSafe(settings, cam.channel, 1)} (sub)</code>
+                <code>{maskRtspUrlSafe(settings, cam, 0)}</code>
+                <code>{maskRtspUrlSafe(settings, cam, 1)} (sub)</code>
               </li>
             ))}
         </ul>

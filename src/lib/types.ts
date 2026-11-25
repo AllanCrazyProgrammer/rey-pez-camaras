@@ -35,6 +35,8 @@ export type StreamStatus =
   /** Puente http:// desde la app https://: el navegador lo bloquea. */
   | 'insecure'
   | 'loading'
+  /** Falló y está volviendo a intentar solo. */
+  | 'reconnecting'
   | 'playing'
   | 'error';
 

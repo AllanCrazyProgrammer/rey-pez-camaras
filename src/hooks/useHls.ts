@@ -36,30 +36,82 @@ export function useHls(src: string | null, active: boolean): {
     setStatus('loading');
     let hls: Hls | null = null;
     let cancelled = false;
+    let failures = 0; // fallas seguidas, para espaciar los reintentos
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let lastTime = -1;
+    let stalledSince = 0;
 
     function onPlaying() {
-      if (!cancelled) setStatus('playing');
+      if (cancelled) return;
+      failures = 0;
+      setStatus('playing');
     }
     // Respaldo: el WebView de Android a veces no avisa "playing" aunque el
-    // video sí avanza. Si el tiempo corre, está en vivo.
+    // video sí avanza. Solo cuenta si ya hay un cuadro de video
+    // (readyState ≥ 2): el reloj puede correr aunque no se decodifique.
     let firstTime = -1;
     function onTimeUpdate() {
       if (!video) return;
       if (firstTime < 0) firstTime = video.currentTime;
-      // Solo cuenta si ya hay un cuadro de video (readyState ≥ 2): el reloj
-      // puede correr aunque el teléfono no logre decodificar.
       else if (video.currentTime > firstTime + 0.5 && video.readyState >= 2) {
         onPlaying();
         video.removeEventListener('timeupdate', onTimeUpdate);
       }
     }
-    video.addEventListener('timeupdate', onTimeUpdate);
     function onVideoError() {
-      if (!cancelled) setStatus('error');
+      if (!cancelled) scheduleRestart();
     }
+
+    /**
+     * Reconexión automática. En el teléfono es normal que un stream falle
+     * (microcorte del WiFi, el teléfono se queda sin decodificadores un
+     * momento): en vez de quedarse en "Sin señal", vuelve a intentar con
+     * esperas de 2, 4, 8… hasta 30 s. Tras 3 fallas seguidas muestra
+     * "Sin señal", pero sigue intentando.
+     */
+    function scheduleRestart() {
+      if (cancelled || retryTimer) return;
+      failures += 1;
+      setStatus(failures >= 3 ? 'error' : 'reconnecting');
+      const delay = Math.min(30_000, 1000 * 2 ** failures);
+      retryTimer = setTimeout(() => {
+        retryTimer = undefined;
+        if (cancelled) return;
+        teardown();
+        void setup();
+      }, delay);
+    }
+
+    function teardown() {
+      if (!video) return;
+      video.removeEventListener('playing', onPlaying);
+      video.removeEventListener('timeupdate', onTimeUpdate);
+      video.removeEventListener('error', onVideoError);
+      if (hls) hls.destroy();
+      hls = null;
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+    }
+
+    // Video congelado: si en 15 s no avanza, se reinicia.
+    const watchdog = setInterval(() => {
+      if (!video || cancelled || retryTimer || video.paused) return;
+      if (video.currentTime !== lastTime) {
+        lastTime = video.currentTime;
+        stalledSince = Date.now();
+      } else if (stalledSince && Date.now() - stalledSince > 15_000) {
+        stalledSince = 0;
+        scheduleRestart();
+      }
+    }, 5000);
 
     async function setup() {
       if (!video) return;
+      firstTime = -1;
+      lastTime = -1;
+      stalledSince = Date.now();
+      video.addEventListener('timeupdate', onTimeUpdate);
       // hls.js primero en todo navegador con MediaSource (Chrome, Firefox,
       // Android, Safari de Mac y iOS 17.1+). Chrome de escritorio ya dice
       // que reproduce HLS nativo (canPlayType = "maybe"), pero no lee los
@@ -78,21 +130,30 @@ export function useHls(src: string | null, active: boolean): {
         }
         return;
       }
-      hls = new HlsClass({
+      const player = new HlsClass({
         enableWorker: true,
         lowLatencyMode: true,
         backBufferLength: 30,
       });
-      hls.loadSource(src as string);
-      hls.attachMedia(video);
-      hls.on(HlsClass.Events.MANIFEST_PARSED, () => {
+      hls = player;
+      let mediaRecoveries = 0;
+      player.loadSource(src as string);
+      player.attachMedia(video);
+      player.on(HlsClass.Events.MANIFEST_PARSED, () => {
         if (cancelled) return;
         void video.play().catch(() => {
           /* Autoplay bloqueado por el navegador: el usuario da play. */
         });
       });
-      hls.on(HlsClass.Events.ERROR, (_event, data) => {
-        if (data.fatal && !cancelled) setStatus('error');
+      player.on(HlsClass.Events.ERROR, (_event, data) => {
+        if (!data.fatal || cancelled || player !== hls) return;
+        // Error del decodificador: hls.js sabe repararlo sin reconectar.
+        if (data.type === HlsClass.ErrorTypes.MEDIA_ERROR && mediaRecoveries < 2) {
+          mediaRecoveries += 1;
+          player.recoverMediaError();
+          return;
+        }
+        scheduleRestart();
       });
       video.addEventListener('playing', onPlaying);
     }
@@ -103,13 +164,9 @@ export function useHls(src: string | null, active: boolean): {
     // dejaría un player vivo consumiendo red y memoria.
     return () => {
       cancelled = true;
-      video.removeEventListener('playing', onPlaying);
-      video.removeEventListener('timeupdate', onTimeUpdate);
-      video.removeEventListener('error', onVideoError);
-      if (hls) hls.destroy();
-      video.pause();
-      video.removeAttribute('src');
-      video.load();
+      clearTimeout(retryTimer);
+      clearInterval(watchdog);
+      teardown();
     };
   }, [src, active, insecure]);
 

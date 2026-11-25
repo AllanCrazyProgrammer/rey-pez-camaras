@@ -8,6 +8,7 @@ const STATUS_LABEL: Record<StreamStatus, string> = {
   'no-bridge': 'Sin puente',
   insecure: 'Puente sin HTTPS',
   loading: 'Cargando…',
+  reconnecting: 'Reconectando…',
   playing: 'En vivo',
   error: 'Sin señal',
 };

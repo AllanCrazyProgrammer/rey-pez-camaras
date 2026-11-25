@@ -142,6 +142,8 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
               ? 'Sin señal'
               : status === 'loading'
                 ? 'Cargando…'
+                : status === 'reconnecting'
+                  ? 'Reconectando…'
                 : status === 'insecure'
                   ? 'Puente sin HTTPS'
                   : 'Sin puente'}

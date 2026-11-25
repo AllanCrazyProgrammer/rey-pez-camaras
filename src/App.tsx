@@ -4,6 +4,7 @@ import { CameraGrid } from './components/CameraGrid';
 import { CameraDetail } from './components/CameraDetail';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { BridgeSetupBanner } from './components/BridgeSetupBanner';
+import { InstallButton } from './components/InstallButton';
 import type { CameraConfig } from './lib/types';
 import { isInsecureBridge } from './lib/rtsp';
 import './App.css';
@@ -89,6 +90,8 @@ export default function App() {
           <h1>Cámaras · Bodega Rey Pez</h1>
           <p>Dahua DH-XVR1B16H-I/T · {activeCameras.length} cámaras · solo Dahua</p>
         </div>
+        <div className="header-actions">
+        <InstallButton />
         <span
           className={`bridge-badge ${bridgeOk && !bridgeInsecure ? 'bridge-badge--ok' : ''}`}
         >
@@ -98,6 +101,7 @@ export default function App() {
               ? 'Puente configurado'
               : 'Puente sin configurar'}
         </span>
+        </div>
       </header>
 
       <nav className="tabs" aria-label="Secciones">

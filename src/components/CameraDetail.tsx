@@ -1,6 +1,9 @@
 import { useCallback, useRef, useState } from 'react';
 import { useDigitalZoom } from '../hooks/useDigitalZoom';
 import { ContextMenu, type MenuItem } from './ContextMenu';
+
+const TOUCH_PRIMARY =
+  typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 import type { CameraConfig } from '../lib/types';
 import { useHls } from '../hooks/useHls';
 import { maskRtspUrlSafe } from '../lib/rtsp';
@@ -117,11 +120,17 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
         )}
         {zoomed ? (
           <span className="zoom-hint">
-            Zoom ×{zoom.scale.toFixed(1)} · rueda acerca/aleja · arrastra para mover · doble
-            clic para salir
+            Zoom ×{zoom.scale.toFixed(1)} ·{' '}
+            {TOUCH_PRIMARY
+              ? 'pellizca para acercar · un dedo mueve · doble toque para salir'
+              : 'rueda acerca/aleja · arrastra para mover · doble clic para salir'}
           </span>
         ) : (
-          hlsUrl && <span className="zoom-hint zoom-hint--idle">Clic derecho: menú</span>
+          hlsUrl && (
+            <span className="zoom-hint zoom-hint--idle">
+              {TOUCH_PRIMARY ? 'Pellizca para zoom' : 'Clic derecho: menú'}
+            </span>
+          )
         )}
         {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={closeMenu} />}
         <span className={`tile-status tile-status--${status}`}>

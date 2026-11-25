@@ -26,6 +26,13 @@ interface Props {
 const DRAG_TYPE = 'application/x-rey-pez-camara';
 
 /**
+ * En pantallas táctiles el arrastre lo maneja el mosaico con el dedo;
+ * el arrastre nativo (iOS lo activa al mantener presionado) chocaría.
+ */
+const TOUCH_PRIMARY =
+  typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+
+/**
  * Una baldosa del mosaico. `memo` evita que se vuelva a renderizar
  * cuando cambia otra cámara: solo re-renderiza si cambian sus props.
  * El player solo se monta cuando la baldosa es visible en pantalla
@@ -71,7 +78,8 @@ export const CameraTile = memo(function CameraTile({
     <div
       ref={containerRef}
       className={`tile${dragging ? ' tile--dragging' : ''}${dropTarget ? ' tile--drop' : ''}`}
-      draggable={!editing}
+      data-camera-id={camera.id}
+      draggable={!editing && !TOUCH_PRIMARY}
       title="Arrastra para acomodar"
       onDragStart={(e) => {
         e.dataTransfer.setData(DRAG_TYPE, String(camera.id));

@@ -65,6 +65,8 @@ input, code, pre { font-family: ui-monospace, Consolas, monospace; }
   outline: 2px dashed transparent; outline-offset: 2px;
 }
 .tile--dragging { opacity: 0.4; }
+.tile { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.grid--touch-drag .tile--dragging { opacity: 0.55; transform: scale(0.96); transition: transform 0.15s; }
 .tile--drop { outline-color: var(--accent); }
 .tile-video-btn {
   display: block; width: 100%; padding: 0; border: 0; background: #000;
@@ -112,6 +114,7 @@ input, code, pre { font-family: ui-monospace, Consolas, monospace; }
 .detail-video video { width: 100%; height: 100%; object-fit: contain; display: block; }
 .detail-video:fullscreen { border-radius: 0; aspect-ratio: auto; }
 .zoom-layer { width: 100%; height: 100%; will-change: transform; }
+.detail-video { touch-action: pan-x pan-y; } /* el pellizco lo maneja la app */
 .detail-video--zoomed { cursor: grab; touch-action: none; }
 .detail-video--zoomed:active { cursor: grabbing; }
 .zoom-hint {

@@ -8,9 +8,17 @@ interface Props {
   onColsChange: (cols: 2 | 3 | 4) => void;
   hlsUrlFor: (camera: CameraConfig, main: boolean) => string | null;
   onSelect: (camera: CameraConfig) => void;
+  onRename: (id: number, name: string) => void;
 }
 
-export function CameraGrid({ cameras, gridCols, onColsChange, hlsUrlFor, onSelect }: Props) {
+export function CameraGrid({
+  cameras,
+  gridCols,
+  onColsChange,
+  hlsUrlFor,
+  onSelect,
+  onRename,
+}: Props) {
   // useCallback estable: los tiles memoizados no se re-renderizan por
   // una función nueva en cada render del padre.
   const handleSelect = useCallback(
@@ -19,7 +27,7 @@ export function CameraGrid({ cameras, gridCols, onColsChange, hlsUrlFor, onSelec
   );
 
   if (cameras.length === 0) {
-    return <p className="empty">No hay cámaras activas. Actívalas en la pestaña Cámaras.</p>;
+    return <p className="empty">No hay cámaras activas. Actívalas en Ajustes.</p>;
   }
 
   return (
@@ -48,6 +56,7 @@ export function CameraGrid({ cameras, gridCols, onColsChange, hlsUrlFor, onSelec
             camera={camera}
             hlsUrl={hlsUrlFor(camera, false)}
             onSelect={handleSelect}
+            onRename={onRename}
           />
         ))}
       </div>

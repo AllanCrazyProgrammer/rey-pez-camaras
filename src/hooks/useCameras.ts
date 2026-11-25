@@ -1,8 +1,19 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CameraConfig, DvrSettings } from '../lib/types';
 import { DEFAULT_SETTINGS } from '../lib/types';
 import { DEFAULT_CAMERAS } from '../data/defaultCameras';
 import { buildHlsUrl, readBridgeFromHash, streamName } from '../lib/rtsp';
+import {
+  fetchSharedNames,
+  mergeShared,
+  saveSharedNames,
+  type NamesSyncStatus,
+} from '../lib/namesSync';
+
+/** Cada cuánto se revisan cambios hechos en otro aparato. */
+const NAMES_REFRESH_MS = 60_000;
+/** Espera tras la última tecla antes de guardar en la Mac mini. */
+const NAMES_SAVE_DELAY_MS = 800;
 
 const SETTINGS_KEY = 'rey-pez-camaras:settings/v1';
 const CAMERAS_KEY = 'rey-pez-camaras:cameras/v1';
@@ -67,7 +78,70 @@ export function useCameras() {
     setSettings((prev) => ({ ...prev, ...patch }));
   }, []);
 
+  // --- Nombres compartidos en la Mac mini ---------------------------------
+  const [namesStatus, setNamesStatus] = useState<NamesSyncStatus>('local');
+  /** true mientras hay una edición local que todavía no llega a la Mac mini. */
+  const dirtyRef = useRef(false);
+  const camerasRef = useRef(cameras);
+  useEffect(() => {
+    camerasRef.current = cameras;
+  }, [cameras]);
+
+  // Bajar nombres al abrir, al volver a la pestaña y cada minuto.
+  useEffect(() => {
+    if (!settings.bridgeUrl.trim()) return;
+    let ctrl: AbortController | null = null;
+    const pull = async (first: boolean) => {
+      if (dirtyRef.current) return;
+      ctrl?.abort();
+      ctrl = new AbortController();
+      if (first) setNamesStatus('loading');
+      try {
+        const shared = await fetchSharedNames(settings.bridgeUrl, ctrl.signal);
+        if (dirtyRef.current) return;
+        if (shared && shared.length > 0) {
+          setCameras((prev) => mergeShared(prev, shared));
+        } else {
+          // La Mac mini aún no tiene nombres: sube los de este aparato.
+          await saveSharedNames(settings.bridgeUrl, camerasRef.current);
+        }
+        setNamesStatus('synced');
+      } catch (e) {
+        if ((e as Error).name !== 'AbortError') setNamesStatus('error');
+      }
+    };
+    void pull(true);
+    const timer = setInterval(() => void pull(false), NAMES_REFRESH_MS);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void pull(false);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      ctrl?.abort();
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [settings.bridgeUrl]);
+
+  // Subir cambios locales (con una pequeña espera para no mandar cada tecla).
+  useEffect(() => {
+    if (!dirtyRef.current || !settings.bridgeUrl.trim()) return;
+    setNamesStatus('saving');
+    const timer = setTimeout(async () => {
+      try {
+        await saveSharedNames(settings.bridgeUrl, cameras);
+        dirtyRef.current = false;
+        setNamesStatus('synced');
+      } catch {
+        dirtyRef.current = false;
+        setNamesStatus('error');
+      }
+    }, NAMES_SAVE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [cameras, settings.bridgeUrl]);
+
   const updateCamera = useCallback((id: number, patch: Partial<CameraConfig>) => {
+    dirtyRef.current = true;
     setCameras((prev) =>
       prev.map((cam) => (cam.id === id ? { ...cam, ...patch } : cam)),
     );
@@ -82,5 +156,14 @@ export function useCameras() {
 
   const activeCameras = cameras.filter((c) => c.enabled);
 
-  return { settings, updateSettings, cameras, activeCameras, updateCamera, hlsUrlFor };
+  return {
+    settings,
+    updateSettings,
+    cameras,
+    activeCameras,
+    updateCamera,
+    hlsUrlFor,
+    // Sin puente no hay Mac mini con quien sincronizar.
+    namesStatus: settings.bridgeUrl.trim() ? namesStatus : ('local' as const),
+  };
 }

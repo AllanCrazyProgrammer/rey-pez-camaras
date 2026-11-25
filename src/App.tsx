@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useCameras } from './hooks/useCameras';
 import { CameraGrid } from './components/CameraGrid';
 import { CameraDetail } from './components/CameraDetail';
@@ -19,8 +19,15 @@ const BridgeGuide = lazy(() =>
 type Tab = 'grid' | 'settings' | 'guide';
 
 export default function App() {
-  const { settings, updateSettings, cameras, activeCameras, updateCamera, hlsUrlFor } =
-    useCameras();
+  const {
+    settings,
+    updateSettings,
+    cameras,
+    activeCameras,
+    updateCamera,
+    hlsUrlFor,
+    namesStatus,
+  } = useCameras();
   const [tab, setTab] = useState<Tab>('grid');
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
@@ -28,6 +35,25 @@ export default function App() {
     () => activeCameras.find((c) => c.id === selectedId) ?? null,
     [activeCameras, selectedId],
   );
+
+  const handleRename = useCallback(
+    (id: number, name: string) => updateCamera(id, { name }),
+    [updateCamera],
+  );
+
+  // Barra espaciadora = recargar la página (si el video se trabó), salvo
+  // cuando se está escribiendo en un campo.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+      const el = e.target as HTMLElement | null;
+      if (el?.closest('input, textarea, select, [contenteditable="true"]')) return;
+      e.preventDefault();
+      location.reload();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const handleSelect = useCallback((camera: CameraConfig) => {
     setSelectedId(camera.id);
@@ -115,6 +141,7 @@ export default function App() {
                   onColsChange={(cols) => updateSettings({ gridCols: cols })}
                   hlsUrlFor={hlsUrlFor}
                   onSelect={handleSelect}
+                  onRename={handleRename}
                 />
               ))}
             {tab === 'settings' && (
@@ -123,6 +150,7 @@ export default function App() {
                 updateSettings={updateSettings}
                 cameras={cameras}
                 updateCamera={updateCamera}
+                namesStatus={namesStatus}
               />
             )}
             {tab === 'guide' && <BridgeGuide />}

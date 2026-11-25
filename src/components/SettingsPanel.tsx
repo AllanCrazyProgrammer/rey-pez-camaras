@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { CameraConfig, DvrSettings } from '../lib/types';
+import type { NamesSyncStatus } from '../lib/namesSync';
 import {
   buildSetupLink,
   generateGo2rtcYaml,
@@ -12,14 +13,29 @@ interface Props {
   updateSettings: (patch: Partial<DvrSettings>) => void;
   cameras: CameraConfig[];
   updateCamera: (id: number, patch: Partial<CameraConfig>) => void;
+  namesStatus: NamesSyncStatus;
 }
+
+const NAMES_STATUS_TEXT: Record<NamesSyncStatus, string> = {
+  local: 'Sin puente: los nombres se guardan solo en este aparato.',
+  loading: 'Cargando nombres de la Mac mini…',
+  synced: '✓ Nombres guardados en la Mac mini: se ven igual en todos tus aparatos.',
+  saving: 'Guardando en la Mac mini…',
+  error: 'No se pudo hablar con la Mac mini: por ahora los nombres quedan solo en este aparato.',
+};
 
 /**
  * Ajustes: datos del DVR, dirección del puente, nombres de cámaras,
  * URLs RTSP (clave tapada) y generador de go2rtc.yaml.
  * Todo se guarda en localStorage al escribir; nada sale de este navegador.
  */
-export function SettingsPanel({ settings, updateSettings, cameras, updateCamera }: Props) {
+export function SettingsPanel({
+  settings,
+  updateSettings,
+  cameras,
+  updateCamera,
+  namesStatus,
+}: Props) {
   const [copied, setCopied] = useState(false);
 
   // El YAML solo se regenera si cambian ajustes o cámaras.
@@ -154,6 +170,12 @@ export function SettingsPanel({ settings, updateSettings, cameras, updateCamera 
 
       <fieldset>
         <legend>Cámaras ({cameras.length})</legend>
+        <p className={namesStatus === 'synced' ? 'ok' : namesStatus === 'error' ? 'warn' : 'panel-note'}>
+          {NAMES_STATUS_TEXT[namesStatus]}
+        </p>
+        <p className="panel-note">
+          También puedes cambiar el nombre desde el mosaico con el lápiz ✎.
+        </p>
         <ul className="camera-list">
           {cameras.map((cam) => (
             <li key={cam.id}>
@@ -171,6 +193,7 @@ export function SettingsPanel({ settings, updateSettings, cameras, updateCamera 
                 <input
                   type="text"
                   value={cam.name}
+                  maxLength={60}
                   onChange={(e) => updateCamera(cam.id, { name: e.target.value })}
                   aria-label={`Nombre de la cámara ${cam.channel}`}
                 />
@@ -180,6 +203,7 @@ export function SettingsPanel({ settings, updateSettings, cameras, updateCamera 
                 <input
                   type="text"
                   value={cam.location}
+                  maxLength={60}
                   onChange={(e) => updateCamera(cam.id, { location: e.target.value })}
                   aria-label={`Ubicación de la cámara ${cam.channel}`}
                 />

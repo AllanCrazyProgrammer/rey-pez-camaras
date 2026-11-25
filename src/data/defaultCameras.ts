@@ -3,7 +3,7 @@ import type { CameraConfig } from '../lib/types';
 /**
  * 14 cámaras activas alrededor de la bodega Rey Pez.
  * Nombres genéricos a propósito: Allan los renombra en la app
- * (pestaña Cámaras) y se guardan en su navegador.
+ * (Ajustes o lápiz ✎ del mosaico) y se comparten vía la Mac mini.
  */
 export const ACTIVE_CAMERA_COUNT = 14;
 

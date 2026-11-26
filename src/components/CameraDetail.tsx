@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useDigitalZoom } from '../hooks/useDigitalZoom';
 import { ContextMenu, type MenuItem } from './ContextMenu';
 
@@ -8,6 +8,7 @@ import type { CameraConfig } from '../lib/types';
 import { useHls } from '../hooks/useHls';
 import { BLANK_POSTER } from '../lib/poster';
 import { maskRtspUrlSafe } from '../lib/rtsp';
+import { captureFrame, deliverSnapshot, snapshotName } from '../lib/snapshot';
 import type { DvrSettings } from '../lib/types';
 import { channelLabel } from '../data/defaultCameras';
 
@@ -23,24 +24,32 @@ interface Props {
 /** Vista grande de una cámara: stream principal (subtype=0) + foto del momento. */
 export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext }: Props) {
   const { videoRef, status } = useHls(hlsUrl, true);
-  const snapshotRef = useRef<HTMLAnchorElement | null>(null);
+  const [shotMsg, setShotMsg] = useState<string | null>(null);
   const { containerRef, zoom, zoomed, zoomAtClient, reset, handlers, style } = useDigitalZoom();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const closeMenu = useCallback(() => setMenu(null), []);
 
   const takeSnapshot = useCallback(() => {
     const video = videoRef.current;
-    if (!video || video.videoWidth === 0) return;
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext('2d')?.drawImage(video, 0, 0);
-    const link = snapshotRef.current;
-    if (!link) return;
-    link.href = canvas.toDataURL('image/png');
-    link.download = `${camera.name.replace(/\s+/g, '-')}-${camera.dvr}-${camera.channel}.png`;
-    link.click();
-  }, [camera.channel, camera.dvr, camera.name, videoRef]);
+    const shot = video ? captureFrame(video) : null;
+    if (!shot) {
+      setShotMsg('No se pudo tomar la foto: el video aún no carga.');
+      return;
+    }
+    deliverSnapshot(shot, snapshotName(camera.name))
+      .then((r) =>
+        setShotMsg(
+          r === 'downloaded' ? 'Foto descargada.' : r === 'shared' ? 'Foto lista.' : null,
+        ),
+      )
+      .catch(() => setShotMsg('No se pudo guardar la foto. Intenta de nuevo.'));
+  }, [camera.name, videoRef]);
+
+  useEffect(() => {
+    if (!shotMsg) return;
+    const t = setTimeout(() => setShotMsg(null), 4000);
+    return () => clearTimeout(t);
+  }, [shotMsg]);
 
   const toggleFullscreen = useCallback(() => {
     if (document.fullscreenElement) void document.exitFullscreen();
@@ -163,9 +172,11 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
         <button type="button" onClick={takeSnapshot} disabled={status !== 'playing'}>
           📸 Foto del momento
         </button>
-        <a ref={snapshotRef} href="#snapshot" className="hidden" aria-hidden="true" tabIndex={-1}>
-          descarga
-        </a>
+        {shotMsg && (
+          <span className="shot-msg" role="status">
+            {shotMsg}
+          </span>
+        )}
         <code className="rtsp-line">{maskRtspUrlSafe(settings, camera, 0)}</code>
       </div>
     </section>

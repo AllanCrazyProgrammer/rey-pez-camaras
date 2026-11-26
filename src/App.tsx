@@ -1,9 +1,9 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useCameras } from './hooks/useCameras';
 import { CameraGrid } from './components/CameraGrid';
 import { CameraDetail } from './components/CameraDetail';
 import { LightMosaic } from './components/LightMosaic';
-import { MOSAIC_STREAM } from './data/mosaicLayout';
+import { MOSAIC_CHANNELS, MOSAIC_STREAM } from './data/mosaicLayout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { BridgeSetupBanner } from './components/BridgeSetupBanner';
 import { InstallButton } from './components/InstallButton';
@@ -82,6 +82,19 @@ export default function App() {
       /* sin storage: solo dura esta visita */
     }
   }, [viewMode]);
+  // Pantalla completa del mosaico (laptops y pantallas). iPhone no la tiene.
+  const mosaicRef = useRef<HTMLDivElement | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const canFullscreen = typeof document !== 'undefined' && document.fullscreenEnabled === true;
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(document.fullscreenElement === mosaicRef.current && !!mosaicRef.current);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+  const toggleMosaicFullscreen = useCallback(() => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void mosaicRef.current?.requestFullscreen().catch(() => undefined);
+  }, []);
   const tabCameras = useMemo(
     () => activeCameras.filter((c) => c.dvr === dvrTab),
     [activeCameras, dvrTab],
@@ -271,6 +284,64 @@ export default function App() {
                   </button>
                 ))}
               </div>
+              {canFullscreen && (
+                <button
+                  type="button"
+                  className="fs-btn"
+                  onClick={toggleMosaicFullscreen}
+                  title="Ver el mosaico en pantalla completa (Esc para salir)"
+                >
+                  ⛶ Pantalla completa
+                </button>
+              )}
+              </div>
+            )}
+            {tab === 'grid' && !selected && (
+              <div
+                ref={mosaicRef}
+                className="mosaic-fs"
+                style={
+                  {
+                    '--cols': settings.gridCols,
+                    '--rows': Math.max(
+                      1,
+                      Math.ceil(
+                        (viewMode === 'ligero'
+                          ? MOSAIC_CHANNELS[dvrTab].length
+                          : tabCameras.length) / settings.gridCols,
+                      ),
+                    ),
+                  } as React.CSSProperties
+                }
+              >
+                {isFullscreen && (
+                  <button type="button" className="fs-exit" onClick={toggleMosaicFullscreen}>
+                    ✕ Salir
+                  </button>
+                )}
+                {viewMode === 'ligero' ? (
+                  <LightMosaic
+                    key={`ligero-${dvrTab}-${refreshKey}`}
+                    dvr={dvrTab}
+                    cameras={cameras}
+                    hlsUrl={buildHlsUrl(settings.bridgeUrl, MOSAIC_STREAM[dvrTab])}
+                    gridCols={settings.gridCols}
+                    onColsChange={(cols) => updateSettings({ gridCols: cols })}
+                    onSelect={handleSelect}
+                    onMove={moveCamera}
+                  />
+                ) : (
+                  <CameraGrid
+                    key={`${dvrTab}-${refreshKey}`}
+                    cameras={tabCameras}
+                    gridCols={settings.gridCols}
+                    onColsChange={(cols) => updateSettings({ gridCols: cols })}
+                    hlsUrlFor={hlsUrlFor}
+                    onSelect={handleSelect}
+                    onRename={handleRename}
+                    onMove={moveCamera}
+                  />
+                )}
               </div>
             )}
             {tab === 'grid' &&
@@ -284,28 +355,7 @@ export default function App() {
                   onPrev={() => step(-1)}
                   onNext={() => step(1)}
                 />
-              ) : viewMode === 'ligero' ? (
-                <LightMosaic
-                  key={`ligero-${dvrTab}-${refreshKey}`}
-                  dvr={dvrTab}
-                  cameras={cameras}
-                  hlsUrl={buildHlsUrl(settings.bridgeUrl, MOSAIC_STREAM[dvrTab])}
-                  gridCols={settings.gridCols}
-                  onColsChange={(cols) => updateSettings({ gridCols: cols })}
-                  onSelect={handleSelect}
-                />
-              ) : (
-                <CameraGrid
-                  key={`${dvrTab}-${refreshKey}`}
-                  cameras={tabCameras}
-                  gridCols={settings.gridCols}
-                  onColsChange={(cols) => updateSettings({ gridCols: cols })}
-                  hlsUrlFor={hlsUrlFor}
-                  onSelect={handleSelect}
-                  onRename={handleRename}
-                  onMove={moveCamera}
-                />
-              ))}
+              ) : null)}
             {tab === 'settings' && (
               <SettingsPanel
                 settings={settings}

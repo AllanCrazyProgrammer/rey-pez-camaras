@@ -111,6 +111,33 @@ input, code, pre { font-family: ui-monospace, Consolas, monospace; }
   gap: 8px 12px; margin: 0 0 12px;
 }
 .mosaic-bar .dvr-tabs { margin: 0; }
+.fs-btn {
+  padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); font: inherit; font-size: 0.9rem;
+  background: var(--surface); color: var(--text); cursor: pointer; margin-left: auto;
+}
+.fs-btn:hover { border-color: var(--accent); }
+
+/* Mosaico en pantalla completa: todas las cámaras caben sin scroll. */
+.mosaic-fs:fullscreen {
+  background: #000; display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.mosaic-fs:fullscreen > section {
+  width: min(100vw, calc((100vh - var(--rows) * 4px) * 16 / 9 * var(--cols) / var(--rows)));
+}
+.mosaic-fs:fullscreen .grid-toolbar { display: none; }
+.mosaic-fs:fullscreen .grid, .mosaic-fs:fullscreen .light-grid { gap: 4px; }
+.mosaic-fs:fullscreen .tile, .mosaic-fs:fullscreen .light-tile { border: 0; border-radius: 0; position: relative; }
+.mosaic-fs:fullscreen .tile-info {
+  position: absolute; left: 6px; bottom: 6px; padding: 1px 7px; border-radius: 4px;
+  background: rgba(0, 0, 0, 0.55); color: #fff; pointer-events: none;
+}
+.mosaic-fs:fullscreen .tile-info span, .mosaic-fs:fullscreen .tile-rename { display: none; }
+.fs-exit {
+  position: fixed; top: 12px; right: 12px; z-index: 5; padding: 6px 12px; border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.25); background: rgba(0, 0, 0, 0.6); color: #fff;
+  font: inherit; font-size: 0.85rem; cursor: pointer; opacity: 0.25; transition: opacity 0.2s;
+}
+.fs-exit:hover, .fs-exit:focus-visible { opacity: 1; }
 .view-mode {
   display: flex; gap: 4px; padding: 4px; border-radius: 10px;
   background: var(--surface); border: 1px solid var(--border);
@@ -129,12 +156,19 @@ input, code, pre { font-family: ui-monospace, Consolas, monospace; }
 }
 .light-grid { display: grid; gap: 8px; }
 .light-tile {
-  position: relative; display: block; padding: 0; border: 1px solid var(--border); border-radius: 8px;
-  overflow: hidden; background: #000; cursor: pointer; aspect-ratio: 16 / 9; max-width: 100%;
+  position: relative; border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  background: #000; aspect-ratio: 16 / 9; max-width: 100%; cursor: grab;
+  outline: 2px dashed transparent; outline-offset: 2px; transition: opacity 0.15s, outline-color 0.15s;
+  -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
+}
+.light-tile.tile--dragging { opacity: 0.4; }
+.grid--touch-drag .light-tile.tile--dragging { opacity: 0.55; transform: scale(0.96); transition: transform 0.15s; }
+.light-tile.tile--drop { outline-color: var(--accent); }
+.light-tile-btn {
+  display: block; width: 100%; height: 100%; padding: 0; border: 0; background: transparent; cursor: pointer;
   outline: 2px solid transparent; outline-offset: -2px; transition: outline-color 0.15s;
 }
-.light-tile:hover, .light-tile:focus-visible { outline-color: var(--accent); }
-.light-tile:disabled { cursor: default; }
+.light-tile-btn:hover, .light-tile-btn:focus-visible { outline-color: var(--accent); }
 .light-tile canvas { display: block; width: 100%; height: 100%; }
 .light-tile-name {
   position: absolute; left: 6px; bottom: 6px; max-width: calc(100% - 12px);
@@ -237,6 +271,7 @@ input, code, pre { font-family: ui-monospace, Consolas, monospace; }
 .detail-no-signal { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--muted); text-align: center; padding: 16px; }
 .detail-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
 .detail-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+.shot-msg { color: var(--ok); font-size: 0.9rem; font-weight: 600; }
 .rtsp-line { color: var(--muted); font-size: 0.8rem; word-break: break-all; }
 .hidden { display: none; }
 

@@ -2,12 +2,14 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react
 import { useCameras } from './hooks/useCameras';
 import { CameraGrid } from './components/CameraGrid';
 import { CameraDetail } from './components/CameraDetail';
+import { LightMosaic } from './components/LightMosaic';
+import { MOSAIC_STREAM } from './data/mosaicLayout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { BridgeSetupBanner } from './components/BridgeSetupBanner';
 import { InstallButton } from './components/InstallButton';
 import { useUpdateCheck } from './hooks/useUpdateCheck';
 import type { CameraConfig, DvrKind } from './lib/types';
-import { isInsecureBridge } from './lib/rtsp';
+import { buildHlsUrl, isInsecureBridge } from './lib/rtsp';
 import './App.css';
 
 // Code-splitting (react.dev: lazy + Suspense): Ajustes y Guía solo se
@@ -28,6 +30,18 @@ const DVR_TABS: [DvrKind, string][] = [
   ['dahua', 'Dahua'],
   ['hik', 'Hikvision'],
 ];
+
+/** Vista del mosaico: un video por cámara o un solo video armado en la Mac mini. */
+type ViewMode = 'normal' | 'ligero';
+const VIEW_MODE_KEY = 'rey-pez-camaras:view-mode/v1';
+
+function readViewMode(): ViewMode {
+  try {
+    return localStorage.getItem(VIEW_MODE_KEY) === 'ligero' ? 'ligero' : 'normal';
+  } catch {
+    return 'normal';
+  }
+}
 
 function readDvrTab(): DvrKind {
   try {
@@ -59,6 +73,15 @@ export default function App() {
       /* sin storage: solo dura esta visita */
     }
   }, [dvrTab]);
+  // Cada aparato recuerda si usa la vista ligera o la normal.
+  const [viewMode, setViewMode] = useState<ViewMode>(readViewMode);
+  useEffect(() => {
+    try {
+      localStorage.setItem(VIEW_MODE_KEY, viewMode);
+    } catch {
+      /* sin storage: solo dura esta visita */
+    }
+  }, [viewMode]);
   const tabCameras = useMemo(
     () => activeCameras.filter((c) => c.dvr === dvrTab),
     [activeCameras, dvrTab],
@@ -212,6 +235,7 @@ export default function App() {
               <BridgeSetupBanner onSave={(bridgeUrl) => updateSettings({ bridgeUrl })} />
             )}
             {tab === 'grid' && !selected && (
+              <div className="mosaic-bar">
               <div className="dvr-tabs" role="tablist" aria-label="DVR">
                 {DVR_TABS.map(([id, label]) => (
                   <button
@@ -229,6 +253,25 @@ export default function App() {
                   </button>
                 ))}
               </div>
+              <div className="view-mode" role="group" aria-label="Vista del mosaico">
+                {(
+                  [
+                    ['ligero', 'Ligero', 'Un solo video: menos datos y batería'],
+                    ['normal', 'Normal', 'Un video por cámara'],
+                  ] as const
+                ).map(([id, label, title]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-pressed={viewMode === id}
+                    title={title}
+                    onClick={() => setViewMode(id)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              </div>
             )}
             {tab === 'grid' &&
               (selected ? (
@@ -240,6 +283,16 @@ export default function App() {
                   onClose={closeCamera}
                   onPrev={() => step(-1)}
                   onNext={() => step(1)}
+                />
+              ) : viewMode === 'ligero' ? (
+                <LightMosaic
+                  key={`ligero-${dvrTab}-${refreshKey}`}
+                  dvr={dvrTab}
+                  cameras={cameras}
+                  hlsUrl={buildHlsUrl(settings.bridgeUrl, MOSAIC_STREAM[dvrTab])}
+                  gridCols={settings.gridCols}
+                  onColsChange={(cols) => updateSettings({ gridCols: cols })}
+                  onSelect={handleSelect}
                 />
               ) : (
                 <CameraGrid

@@ -318,3 +318,13 @@ input, code, pre { font-family: ui-monospace, Consolas, monospace; }
   .camera-list li { grid-template-columns: 1fr; }
   .detail-video { aspect-ratio: 4 / 3; }
 }
+
+/* Celular en horizontal: la cámara abierta ocupa toda la pantalla.
+   Al regresar el celular a vertical, vuelve la vista normal. */
+@media (orientation: landscape) and (max-height: 540px) and (pointer: coarse) {
+  .detail-video {
+    position: fixed; inset: 0; z-index: 40; width: 100vw; height: 100vh; height: 100dvh;
+    aspect-ratio: auto; border-radius: 0;
+    padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px);
+  }
+}

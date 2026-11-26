@@ -8,6 +8,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { BridgeSetupBanner } from './components/BridgeSetupBanner';
 import { InstallButton } from './components/InstallButton';
 import { useUpdateCheck } from './hooks/useUpdateCheck';
+import { Capacitor } from '@capacitor/core';
 import type { CameraConfig, DvrKind } from './lib/types';
 import { buildHlsUrl, isInsecureBridge } from './lib/rtsp';
 import './App.css';
@@ -154,6 +155,34 @@ export default function App() {
     // history.back() dispara popstate, que cierra la vista grande.
     if (history.state?.[CAMERA_STATE]) history.back();
     else setSelectedId(null);
+  }, []);
+
+  // Botón "atrás" de Android en la APK: primero sale de pantalla completa,
+  // luego cierra la cámara abierta, luego regresa de Ajustes/Guía al
+  // mosaico. En el mosaico, manda la app al fondo (no la cierra).
+  const backRef = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    backRef.current = () => {
+      if (document.fullscreenElement) void document.exitFullscreen();
+      else if (selectedId !== null) closeCamera();
+      else if (tab !== 'grid') setTab('grid');
+      else void import('@capacitor/app').then(({ App: CapApp }) => CapApp.minimizeApp());
+    };
+  }, [selectedId, tab, closeCamera]);
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    let cancelled = false;
+    let remove: (() => void) | undefined;
+    void import('@capacitor/app').then(({ App: CapApp }) =>
+      CapApp.addListener('backButton', () => backRef.current()).then((h) => {
+        if (cancelled) void h.remove();
+        else remove = () => void h.remove();
+      }),
+    );
+    return () => {
+      cancelled = true;
+      remove?.();
+    };
   }, []);
 
   const step = useCallback(

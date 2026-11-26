@@ -109,12 +109,14 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
         onDoubleClick={(e) => {
           if ((e.target as HTMLElement).closest('.context-menu')) return;
           // Con zoom: doble clic quita el zoom. Sin zoom (escritorio):
-          // regresa al mosaico, saliendo antes de pantalla completa.
+          // regresa al mosaico.
           if (zoomed || TOUCH_PRIMARY) {
             reset();
             return;
           }
-          if (document.fullscreenElement) void document.exitFullscreen();
+          // Si la pantalla completa es solo de esta cámara, se sale; si es la
+          // del mosaico, se queda para regresar al mosaico en pantalla completa.
+          if (document.fullscreenElement === containerRef.current) void document.exitFullscreen();
           onClose();
         }}
         onPointerDown={(e) => {

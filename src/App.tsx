@@ -186,14 +186,16 @@ export default function App() {
     else setSelectedId(null);
   }, []);
 
-  // Botón "atrás" de Android en la APK: primero sale de pantalla completa,
-  // luego cierra la cámara abierta, luego regresa de Ajustes/Guía al
+  // Botón "atrás" de Android en la APK: primero cierra la cámara abierta,
+  // luego sale de pantalla completa, luego regresa de Ajustes/Guía al
   // mosaico. En el mosaico, manda la app al fondo (no la cierra).
   const backRef = useRef<() => void>(() => undefined);
   useEffect(() => {
     backRef.current = () => {
-      if (document.fullscreenElement) void document.exitFullscreen();
-      else if (selectedId !== null) closeCamera();
+      // Con una cámara abierta en pantalla completa, atrás regresa al
+      // mosaico sin salir de pantalla completa.
+      if (selectedId !== null) closeCamera();
+      else if (document.fullscreenElement) void document.exitFullscreen();
       else if (tab !== 'grid') setTab('grid');
       else void import('@capacitor/app').then(({ App: CapApp }) => CapApp.minimizeApp());
     };
@@ -354,7 +356,7 @@ export default function App() {
               )}
               </div>
             )}
-            {tab === 'grid' && !selected && (() => {
+            {tab === 'grid' && (() => {
               const tileCount =
                 viewMode === 'ligero'
                   ? tabCameras.filter((c) => MOSAIC_CHANNELS[dvrTab].includes(c.channel)).length
@@ -373,12 +375,27 @@ export default function App() {
                   } as React.CSSProperties
                 }
               >
-                {isFullscreen && (
-                  <button type="button" className="fs-exit" onClick={toggleMosaicFullscreen}>
-                    ✕ Salir
-                  </button>
-                )}
-                {viewMode === 'ligero' ? (
+                {isFullscreen &&
+                  (selected ? (
+                    <button type="button" className="fs-exit" onClick={closeCamera}>
+                      ← Mosaico
+                    </button>
+                  ) : (
+                    <button type="button" className="fs-exit" onClick={toggleMosaicFullscreen}>
+                      ✕ Salir
+                    </button>
+                  ))}
+                {selected ? (
+                  <CameraDetail
+                    key={`${selected.id}-${refreshKey}`}
+                    camera={selected}
+                    settings={settings}
+                    hlsUrl={hlsUrlFor(selected, true)}
+                    onClose={closeCamera}
+                    onPrev={() => step(-1)}
+                    onNext={() => step(1)}
+                  />
+                ) : viewMode === 'ligero' ? (
                   <LightMosaic
                     key={`ligero-${dvrTab}-${refreshKey}`}
                     dvr={dvrTab}
@@ -404,18 +421,7 @@ export default function App() {
               </div>
               );
             })()}
-            {tab === 'grid' &&
-              (selected ? (
-                <CameraDetail
-                  key={`${selected.id}-${refreshKey}`}
-                  camera={selected}
-                  settings={settings}
-                  hlsUrl={hlsUrlFor(selected, true)}
-                  onClose={closeCamera}
-                  onPrev={() => step(-1)}
-                  onNext={() => step(1)}
-                />
-              ) : null)}
+
             {tab === 'settings' && (
               <SettingsPanel
                 settings={settings}

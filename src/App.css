@@ -125,6 +125,10 @@ input, code, pre { font-family: ui-monospace, Consolas, monospace; }
   width: min(100vw, calc((100vh - var(--rows) * 4px) * 16 / 9 * var(--cols) / var(--rows)));
 }
 .mosaic-fs:fullscreen .grid-toolbar { display: none; }
+/* Cámara abierta desde el mosaico en pantalla completa: solo el video. */
+.mosaic-fs:fullscreen > section.detail { width: 100vw; height: 100vh; }
+.mosaic-fs:fullscreen .detail-header, .mosaic-fs:fullscreen .detail-actions { display: none; }
+.mosaic-fs:fullscreen .detail-video { width: 100%; height: 100%; aspect-ratio: auto; border-radius: 0; }
 .mosaic-fs:fullscreen .grid, .mosaic-fs:fullscreen .light-grid { gap: 4px; }
 .mosaic-fs:fullscreen .tile, .mosaic-fs:fullscreen .light-tile { border: 0; border-radius: 0; position: relative; }
 .mosaic-fs:fullscreen .tile-info {

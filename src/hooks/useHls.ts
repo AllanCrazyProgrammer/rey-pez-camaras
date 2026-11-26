@@ -2,6 +2,22 @@ import { useEffect, useRef, useState } from 'react';
 import type Hls from 'hls.js';
 import type { StreamStatus } from '../lib/types';
 import { isInsecureBridge } from '../lib/rtsp';
+import { mseSupported, startMse, wsUrlFromHls } from '../lib/mseStream';
+
+/**
+ * Video directo (MSE por WebSocket) si el navegador puede; si no, HLS.
+ * Medido en la Mac mini: directo ~2.1 s y HLS ~2.3 s detrás del reloj de
+ * la cámara (el DVR solo ya pone ~1.6 s). Fuera de la bodega el directo
+ * se ahorra pedir cada pedazo de HLS. Agregar ?hls a la dirección fuerza HLS.
+ */
+function preferDirect(): boolean {
+  try {
+    if (new URLSearchParams(location.search).has('hls')) return false;
+  } catch {
+    /* sin location: se usa directo */
+  }
+  return mseSupported();
+}
 
 /**
  * Reproduce un HLS con hls.js (Chrome/Firefox/Android) o con el
@@ -40,10 +56,15 @@ export function useHls(src: string | null, active: boolean): {
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     let lastTime = -1;
     let stalledSince = 0;
+    let useDirect = preferDirect();
+    let directFails = 0; // fallas del video directo antes de reproducir
+    let everPlayed = false;
+    let stopDirect: (() => void) | undefined;
 
     function onPlaying() {
       if (cancelled) return;
       failures = 0;
+      everPlayed = true;
       setStatus('playing');
     }
     // Respaldo: el WebView de Android a veces no avisa "playing" aunque el
@@ -87,9 +108,12 @@ export function useHls(src: string | null, active: boolean): {
       video.removeEventListener('playing', onPlaying);
       video.removeEventListener('timeupdate', onTimeUpdate);
       video.removeEventListener('error', onVideoError);
+      stopDirect?.();
+      stopDirect = undefined;
       if (hls) hls.destroy();
       hls = null;
       video.pause();
+      video.playbackRate = 1;
       video.removeAttribute('src');
       video.load();
     }
@@ -112,6 +136,18 @@ export function useHls(src: string | null, active: boolean): {
       lastTime = -1;
       stalledSince = Date.now();
       video.addEventListener('timeupdate', onTimeUpdate);
+      const wsUrl = useDirect ? wsUrlFromHls(src as string) : null;
+      if (wsUrl) {
+        video.addEventListener('playing', onPlaying);
+        video.addEventListener('error', onVideoError);
+        stopDirect = startMse(video, wsUrl, () => {
+          if (cancelled) return;
+          // Si el directo nunca arrancó tras 3 intentos, este video pasa a HLS.
+          if (!everPlayed && ++directFails >= 3) useDirect = false;
+          scheduleRestart();
+        });
+        return;
+      }
       // hls.js primero en todo navegador con MediaSource (Chrome, Firefox,
       // Android, Safari de Mac y iOS 17.1+). Chrome de escritorio ya dice
       // que reproduce HLS nativo (canPlayType = "maybe"), pero no lee los

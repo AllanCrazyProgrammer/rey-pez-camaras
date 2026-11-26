@@ -5,7 +5,8 @@ import { CameraTile } from './CameraTile';
 
 interface Props {
   cameras: CameraConfig[];
-  gridCols: 2 | 3 | 4;
+  /** Columnas (2-4 elegidas por Allan; en pantalla completa se calculan). */
+  gridCols: number;
   onColsChange: (cols: 2 | 3 | 4) => void;
   hlsUrlFor: (camera: CameraConfig, main: boolean) => string | null;
   onSelect: (camera: CameraConfig) => void;

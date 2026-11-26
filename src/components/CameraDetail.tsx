@@ -8,7 +8,7 @@ import type { CameraConfig } from '../lib/types';
 import { useHls } from '../hooks/useHls';
 import { BLANK_POSTER } from '../lib/poster';
 import { maskRtspUrlSafe } from '../lib/rtsp';
-import { captureFrame, deliverSnapshot, snapshotName } from '../lib/snapshot';
+import { APK_SIN_PLUGINS, captureFrame, deliverSnapshot, snapshotName } from '../lib/snapshot';
 import type { DvrSettings } from '../lib/types';
 import { channelLabel } from '../data/defaultCameras';
 
@@ -42,12 +42,19 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
           r === 'downloaded' ? 'Foto descargada.' : r === 'shared' ? 'Foto lista.' : null,
         ),
       )
-      .catch(() => setShotMsg('No se pudo guardar la foto. Intenta de nuevo.'));
+      .catch((err: unknown) => {
+        const msg = String((err as Error)?.message ?? err);
+        setShotMsg(
+          msg === APK_SIN_PLUGINS
+            ? 'Para guardar fotos instala la APK nueva.'
+            : `No se pudo guardar la foto (${msg.slice(0, 80)}).`,
+        );
+      });
   }, [camera.name, videoRef]);
 
   useEffect(() => {
     if (!shotMsg) return;
-    const t = setTimeout(() => setShotMsg(null), 4000);
+    const t = setTimeout(() => setShotMsg(null), shotMsg.startsWith('Foto') ? 4000 : 12000);
     return () => clearTimeout(t);
   }, [shotMsg]);
 
@@ -173,7 +180,10 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
           📸 Foto del momento
         </button>
         {shotMsg && (
-          <span className="shot-msg" role="status">
+          <span
+            className={`shot-msg${/^(No se pudo|Para guardar)/.test(shotMsg) ? ' shot-msg--error' : ''}`}
+            role="status"
+          >
             {shotMsg}
           </span>
         )}

@@ -26,6 +26,8 @@ export function snapshotName(cameraName: string, date = new Date()): string {
   return `${safe}-${stamp}.jpg`;
 }
 
+export const APK_SIN_PLUGINS = 'APK_SIN_PLUGINS';
+
 const TOUCH = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
 /**
@@ -41,6 +43,10 @@ export async function deliverSnapshot(
   filename: string,
 ): Promise<'shared' | 'downloaded' | 'cancelled'> {
   if (Capacitor.isNativePlatform()) {
+    // Una APK vieja no trae estos plugins: la foto no se puede entregar.
+    if (!Capacitor.isPluginAvailable('Filesystem') || !Capacitor.isPluginAvailable('Share')) {
+      throw new Error(APK_SIN_PLUGINS);
+    }
     const [{ Filesystem, Directory }, { Share }] = await Promise.all([
       import('@capacitor/filesystem'),
       import('@capacitor/share'),
@@ -53,8 +59,10 @@ export async function deliverSnapshot(
     try {
       await Share.share({ title: filename, files: [uri] });
       return 'shared';
-    } catch {
-      return 'cancelled';
+    } catch (err) {
+      // Cerrar el menú sin elegir nada no es un error.
+      if (/cancel/i.test(String((err as Error)?.message ?? err))) return 'cancelled';
+      throw err;
     }
   }
 

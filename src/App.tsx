@@ -52,6 +52,25 @@ function readDvrTab(): DvrKind {
   }
 }
 
+/**
+ * Cuántas columnas hacen las cámaras (16:9) más grandes en una pantalla
+ * de w x h. Ej.: 14 cámaras en un celular acostado → 5 por fila.
+ */
+function bestFitCols(count: number, w: number, h: number): number {
+  if (!count || !w || !h) return 4;
+  let best = 1;
+  let bestW = 0;
+  for (let cols = 1; cols <= count; cols++) {
+    const rows = Math.ceil(count / cols);
+    const tileW = Math.min(w / cols, ((h - rows * 4) / rows) * (16 / 9));
+    if (tileW > bestW + 0.5) {
+      bestW = tileW;
+      best = cols;
+    }
+  }
+  return best;
+}
+
 export default function App() {
   const {
     settings,
@@ -92,6 +111,16 @@ export default function App() {
     document.addEventListener('fullscreenchange', onChange);
     return () => document.removeEventListener('fullscreenchange', onChange);
   }, []);
+  // En pantalla completa las columnas se eligen solas para que las cámaras
+  // salgan lo más grandes posible (celular acostado, laptop, tele).
+  const [screenSize, setScreenSize] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const read = () => setScreenSize({ w: window.innerWidth, h: window.innerHeight });
+    read();
+    window.addEventListener('resize', read);
+    return () => window.removeEventListener('resize', read);
+  }, [isFullscreen]);
   const toggleMosaicFullscreen = useCallback(() => {
     if (document.fullscreenElement) void document.exitFullscreen();
     else void mosaicRef.current?.requestFullscreen().catch(() => undefined);
@@ -325,21 +354,22 @@ export default function App() {
               )}
               </div>
             )}
-            {tab === 'grid' && !selected && (
+            {tab === 'grid' && !selected && (() => {
+              const tileCount =
+                viewMode === 'ligero'
+                  ? tabCameras.filter((c) => MOSAIC_CHANNELS[dvrTab].includes(c.channel)).length
+                  : tabCameras.length;
+              const cols = isFullscreen
+                ? bestFitCols(tileCount, screenSize.w, screenSize.h)
+                : settings.gridCols;
+              return (
               <div
                 ref={mosaicRef}
                 className="mosaic-fs"
                 style={
                   {
-                    '--cols': settings.gridCols,
-                    '--rows': Math.max(
-                      1,
-                      Math.ceil(
-                        (viewMode === 'ligero'
-                          ? MOSAIC_CHANNELS[dvrTab].length
-                          : tabCameras.length) / settings.gridCols,
-                      ),
-                    ),
+                    '--cols': cols,
+                    '--rows': Math.max(1, Math.ceil(tileCount / cols)),
                   } as React.CSSProperties
                 }
               >
@@ -354,7 +384,7 @@ export default function App() {
                     dvr={dvrTab}
                     cameras={cameras}
                     hlsUrl={buildHlsUrl(settings.bridgeUrl, MOSAIC_STREAM[dvrTab])}
-                    gridCols={settings.gridCols}
+                    gridCols={cols}
                     onColsChange={(cols) => updateSettings({ gridCols: cols })}
                     onSelect={handleSelect}
                     onMove={moveCamera}
@@ -363,7 +393,7 @@ export default function App() {
                   <CameraGrid
                     key={`${dvrTab}-${refreshKey}`}
                     cameras={tabCameras}
-                    gridCols={settings.gridCols}
+                    gridCols={cols}
                     onColsChange={(cols) => updateSettings({ gridCols: cols })}
                     hlsUrlFor={hlsUrlFor}
                     onSelect={handleSelect}
@@ -372,7 +402,8 @@ export default function App() {
                   />
                 )}
               </div>
-            )}
+              );
+            })()}
             {tab === 'grid' &&
               (selected ? (
                 <CameraDetail

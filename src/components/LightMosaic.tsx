@@ -22,7 +22,8 @@ interface Props {
   cameras: CameraConfig[];
   /** URL HLS del mosaico de este DVR, o null si no hay puente. */
   hlsUrl: string | null;
-  gridCols: 2 | 3 | 4;
+  /** Columnas (2-4 elegidas por Allan; en pantalla completa se calculan). */
+  gridCols: number;
   onColsChange: (cols: 2 | 3 | 4) => void;
   onSelect: (camera: CameraConfig) => void;
   /** Soltar una cámara sobre otra: la movida toma ese lugar (mismo orden que el modo normal). */

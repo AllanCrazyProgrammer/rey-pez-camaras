@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#c85a17"/>
+  <g fill="#fff">
+    <!-- Cámara de seguridad tipo bala sobre su soporte -->
+    <rect x="118" y="176" width="236" height="120" rx="34" transform="rotate(-12 236 236)"/>
+    <path d="M352 196 l58 -30 v126 l-58 -30 z" transform="rotate(-12 236 236)"/>
+    <rect x="200" y="300" width="28" height="78" rx="10"/>
+    <rect x="150" y="368" width="128" height="26" rx="12"/>
+  </g>
+  <circle cx="300" cy="222" r="26" fill="#c85a17"/>
+  <circle cx="300" cy="222" r="12" fill="#fff"/>
+</svg>

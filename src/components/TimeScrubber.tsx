@@ -154,17 +154,30 @@ export function TimeScrubber({ spans, position, advancing = false, onCommit }: P
     if (!canvas || !wrap) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const css = getComputedStyle(wrap);
-    const col = (v: string, fb: string) => css.getPropertyValue(v).trim() || fb;
-    const C = {
-      bg: col('--surface-2', '#262622'),
-      text: col('--text', '#efe9dc'),
-      muted: col('--muted', '#a8a294'),
-      border: col('--border', '#3a3a32'),
-      accent: col('--accent', '#c85a17'),
-      ok: col('--ok', '#4caf7d'),
-      bgPage: col('--bg', '#141412'),
+    // Colores y letra del tema actual (--scrub-* si el tema los define).
+    // Se vuelven a leer cuando cambia el tema.
+    const readColors = () => {
+      const css = getComputedStyle(wrap);
+      const col = (v: string, fb: string) => css.getPropertyValue(v).trim() || fb;
+      return {
+        bg: col('--scrub-bg', col('--surface-2', '#262622')),
+        text: col('--scrub-text', col('--text', '#efe9dc')),
+        muted: col('--scrub-tick', col('--muted', '#a8a294')),
+        border: col('--border', '#3a3a32'),
+        accent: col('--scrub-ring', col('--accent', '#c85a17')),
+        ok: col('--scrub-span', col('--ok', '#4caf7d')),
+        bgPage: col('--scrub-out', col('--bg', '#141412')),
+        font: col('--scrub-font', col('--font-num', 'system-ui, sans-serif')),
+      };
     };
+    let C = readColors();
+    const onTheme = () => {
+      // El CSS del tema ya se aplicó en este punto; un cuadro después, por si acaso.
+      requestAnimationFrame(() => {
+        C = readColors();
+      });
+    };
+    window.addEventListener('themechange', onTheme);
     let raf = 0;
     let lastT = performance.now();
     let lastLabel = '';
@@ -206,7 +219,7 @@ export function TimeScrubber({ spans, position, advancing = false, onCommit }: P
       const major = TICK_STEPS.find((s) => s / spp >= 90 && s % minor === 0) ?? 21600;
       ctx.strokeStyle = C.muted;
       ctx.fillStyle = C.text;
-      ctx.font = '600 11px system-ui, sans-serif';
+      ctx.font = `600 11px ${C.font}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'alphabetic';
       const first = Math.ceil(Math.max(0, t0) / minor) * minor;
@@ -243,7 +256,7 @@ export function TimeScrubber({ spans, position, advancing = false, onCommit }: P
       const major = TICK_STEPS.find((v) => v / spp >= 30 && v % minor === 0) ?? 21600;
       ctx.strokeStyle = C.text;
       ctx.fillStyle = C.text;
-      ctx.font = '700 11px system-ui, sans-serif';
+      ctx.font = `700 11px ${C.font}`;
       ctx.textAlign = 'center';
       ctx.beginPath();
       for (let t = Math.ceil(Math.max(0, tFrom) / minor) * minor; t <= Math.min(DAY, tTo); t += minor) {
@@ -349,7 +362,10 @@ export function TimeScrubber({ spans, position, advancing = false, onCommit }: P
       }
     };
     raf = requestAnimationFrame(frame);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('themechange', onTheme);
+    };
   }, []);
 
   // Arrastre, inercia, pellizco y rueda.

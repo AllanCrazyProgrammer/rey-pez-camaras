@@ -41,8 +41,8 @@ export function CameraGrid({
   return (
     <section aria-label="Mosaico de cámaras">
       <div className="grid-toolbar">
-        <span>
-          {cameras.length} cámaras · arrastra para acomodarlas (con el dedo: mantén presionado) · espacio recarga
+        <span title="Arrastra para acomodarlas (con el dedo: mantén presionado) · espacio recarga">
+          {cameras.length} cámaras
         </span>
         <div className="grid-cols" role="group" aria-label="Columnas del mosaico">
           {([2, 3, 4] as const).map((cols) => (

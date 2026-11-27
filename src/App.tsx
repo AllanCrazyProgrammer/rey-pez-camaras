@@ -12,6 +12,7 @@ import { Capacitor } from '@capacitor/core';
 import type { CameraConfig, DvrKind } from './lib/types';
 import { buildHlsUrl, isInsecureBridge } from './lib/rtsp';
 import './App.css';
+import './themes/themes.css';
 
 // Code-splitting (react.dev: lazy + Suspense): Ajustes y Guía solo se
 // descargan cuando Allan abre esa pestaña, no al cargar el mosaico.
@@ -23,6 +24,38 @@ const BridgeGuide = lazy(() =>
 );
 
 type Tab = 'grid' | 'settings' | 'guide';
+
+/** Logo: el pez de Rey Pez (se pinta con el color del tema). */
+function FishLogo() {
+  return (
+    <svg className="brand-fish" viewBox="0 0 48 32" aria-hidden="true">
+      <path d="M3 16c6-9 18-12 28-6l9-6-2 12 2 12-9-6C21 28 9 25 3 16z" fill="currentColor" />
+      <circle cx="12" cy="14" r="2" className="brand-fish-eye" />
+    </svg>
+  );
+}
+
+const ICONS: Record<Tab, string> = {
+  grid: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',
+  settings: 'M12 8.8a3.2 3.2 0 1 0 0 6.4 3.2 3.2 0 0 0 0-6.4zM12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1',
+  guide: 'M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 21V5',
+};
+
+/** Reloj de la barra de arriba (hora de 12 h). */
+function HeaderClock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 15000);
+    return () => clearInterval(t);
+  }, []);
+  const h = now.getHours();
+  return (
+    <span className="header-clock" aria-label="Hora">
+      {h % 12 === 0 ? 12 : h % 12}:{String(now.getMinutes()).padStart(2, '0')}
+      <small>{h < 12 ? 'AM' : 'PM'}</small>
+    </span>
+  );
+}
 
 /** Marca en history.state de que está abierta la vista grande. */
 const CAMERA_STATE = 'reyPezCamara';
@@ -241,56 +274,53 @@ export default function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <div>
-          <h1>Cámaras · Bodega Rey Pez</h1>
-          <p>Dahua + Hikvision · {activeCameras.length} cámaras</p>
+        <div className="brand">
+          <FishLogo />
+          <div>
+            <h1>Rey Pez</h1>
+            <p>Bodega · {activeCameras.length} cámaras</p>
+          </div>
         </div>
+        <nav className="tabs" aria-label="Secciones">
+          {(
+            [
+              ['grid', 'Mosaico'],
+              ['settings', 'Ajustes'],
+              ['guide', 'Guía'],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              aria-current={tab === id ? 'page' : undefined}
+              className={tab === id ? 'tab-active' : ''}
+              onClick={() => {
+                setTab(id);
+                closeCamera();
+              }}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d={ICONS[id]} />
+              </svg>
+              {label}
+            </button>
+          ))}
+        </nav>
         <div className="header-actions">
-        <InstallButton />
-        <span
-          className={`bridge-badge ${bridgeOk && !bridgeInsecure ? 'bridge-badge--ok' : ''}`}
-        >
-          {bridgeInsecure
-            ? 'Puente sin HTTPS'
-            : bridgeOk
-              ? 'Puente configurado'
-              : 'Puente sin configurar'}
-        </span>
+          <InstallButton />
+          <span
+            className={`bridge-badge ${bridgeOk && !bridgeInsecure ? 'bridge-badge--ok' : ''}`}
+          >
+            <i aria-hidden="true" />
+            {bridgeInsecure
+              ? 'Puente sin HTTPS'
+              : bridgeOk
+                ? 'Puente conectado'
+                : 'Puente sin configurar'}
+          </span>
+          <HeaderClock />
         </div>
       </header>
-
-      <nav className="tabs" aria-label="Secciones">
-        {(
-          [
-            ['grid', 'Mosaico'],
-            ['settings', 'Ajustes'],
-            ['guide', 'Guía del puente'],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            aria-current={tab === id ? 'page' : undefined}
-            className={tab === id ? 'tab-active' : ''}
-            onClick={() => {
-              setTab(id);
-              closeCamera();
-            }}
-          >
-            {label}
-          </button>
-        ))}
-        {tab === 'grid' && (
-          <button
-            type="button"
-            className="refresh-btn"
-            onClick={() => setRefreshKey((k) => k + 1)}
-            title="Volver a conectar todas las cámaras"
-          >
-            ⟳ Actualizar cámaras
-          </button>
-        )}
-      </nav>
 
       {updateReady && (
         <div className="update-banner" role="status">
@@ -344,6 +374,14 @@ export default function App() {
                   </button>
                 ))}
               </div>
+              <button
+                type="button"
+                className="fs-btn refresh-btn"
+                onClick={() => setRefreshKey((k) => k + 1)}
+                title="Volver a conectar todas las cámaras"
+              >
+                ⟳ Recargar
+              </button>
               {canFullscreen && (
                 <button
                   type="button"
@@ -435,14 +473,6 @@ export default function App() {
           </Suspense>
         </ErrorBoundary>
       </main>
-
-      <footer className="app-footer">
-        <p>
-          El video llega por el puente go2rtc de la bodega. Sin puente, las
-          cámaras muestran su estado real (“Sin puente” / “Sin señal”), nunca
-          video falso.
-        </p>
-      </footer>
     </div>
   );
 }

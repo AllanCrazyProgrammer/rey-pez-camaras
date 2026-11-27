@@ -8,6 +8,7 @@ import {
   maskRtspUrlSafe,
 } from '../lib/rtsp';
 import { channelLabel } from '../data/defaultCameras';
+import { applyTheme, readTheme, THEMES, type ThemeId } from '../lib/theme';
 
 interface Props {
   settings: DvrSettings;
@@ -38,6 +39,11 @@ export function SettingsPanel({
   namesStatus,
 }: Props) {
   const [copied, setCopied] = useState(false);
+  const [theme, setTheme] = useState<ThemeId>(readTheme);
+  const pickTheme = (id: ThemeId) => {
+    setTheme(id);
+    applyTheme(id);
+  };
 
   // El YAML solo se regenera si cambian ajustes o cámaras.
   const yaml = useMemo(
@@ -92,6 +98,32 @@ export function SettingsPanel({
         La IP y la clave se guardan solo en este navegador. Nunca se suben al
         repo ni a ningún servidor.
       </p>
+
+      <fieldset>
+        <legend>Apariencia</legend>
+        <p className="panel-note">Solo cambia cómo se ve; cada aparato guarda el suyo.</p>
+        <div className="theme-grid" role="radiogroup" aria-label="Tema de la app">
+          {THEMES.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="radio"
+              aria-checked={theme === t.id}
+              className={`theme-card${theme === t.id ? ' theme-card--on' : ''}`}
+              data-preview={t.id}
+              onClick={() => pickTheme(t.id)}
+            >
+              <span className="theme-swatches" aria-hidden="true">
+                {t.swatches.map((c) => (
+                  <i key={c} style={{ background: c }} />
+                ))}
+              </span>
+              <b>{t.name}</b>
+              <small>{t.description}</small>
+            </button>
+          ))}
+        </div>
+      </fieldset>
 
       <fieldset>
         <legend>DVR Dahua DH-XVR1B16H-I/T</legend>

@@ -7,7 +7,7 @@ const TOUCH_PRIMARY =
 import type { CameraConfig } from '../lib/types';
 import { useHls } from '../hooks/useHls';
 import { BLANK_POSTER } from '../lib/poster';
-import { buildHlsUrl, maskRtspUrlSafe } from '../lib/rtsp';
+import { buildHlsUrl } from '../lib/rtsp';
 import { isoDate, startPlayback } from '../lib/recordings';
 import { CLIP_FOLDER, recordingSupported, saveClip, startClip, type ClipRecorder } from '../lib/clipRecorder';
 import { RecordingsBar } from './RecordingsBar';
@@ -519,7 +519,6 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
             </button>
           </span>
         )}
-        <code className="rtsp-line">{maskRtspUrlSafe(settings, camera, 0)}</code>
       </div>
     </section>
   );

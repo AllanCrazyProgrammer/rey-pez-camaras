@@ -104,7 +104,7 @@ export function LightMosaic({
     <section aria-label="Mosaico ligero">
       <div className="grid-toolbar">
         <span>
-          Un solo video con {cells.length} cámaras · toca una para verla en grande
+          {cells.length} cámaras · un solo video
           {label && (
             <span className={`light-status tile-status--${status}`}>{label}</span>
           )}

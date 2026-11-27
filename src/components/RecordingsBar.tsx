@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CameraConfig } from '../lib/types';
 import { fetchTramos, hora12, isoDate, toSec, type Tramo } from '../lib/recordings';
+import { TimeScrubber } from './TimeScrubber';
 
 interface Props {
   camera: CameraConfig;
@@ -14,8 +15,8 @@ interface Props {
 const DAY = 86400;
 
 /**
- * Barra de grabaciones: día, línea de 24 h con lo grabado y saltos de
- * ±1 / ±10 min. Tocar la línea brinca a esa hora.
+ * Barra de grabaciones: día, saltos de ±1 / ±10 min, resumen de las 24 h
+ * (tocarlo brinca a esa hora) y el deslizador fino con lupa.
  */
 export function RecordingsBar({ camera, bridgeUrl, fecha, position, onSeek }: Props) {
   const [tramos, setTramos] = useState<Tramo[] | null>(null);
@@ -83,9 +84,6 @@ export function RecordingsBar({ camera, bridgeUrl, fecha, position, onSeek }: Pr
           <button type="button" onClick={() => jump(-60)} disabled={position === null}>
             ‹ 1 min
           </button>
-          <span className="rec-time" aria-live="polite">
-            {position === null ? '--:--:--' : hora12(position)}
-          </span>
           <button type="button" onClick={() => jump(60)} disabled={position === null}>
             1 min ›
           </button>
@@ -97,7 +95,7 @@ export function RecordingsBar({ camera, bridgeUrl, fecha, position, onSeek }: Pr
 
       <div
         ref={lineRef}
-        className="rec-line"
+        className="rec-line rec-line--overview"
         role="slider"
         tabIndex={0}
         aria-label="Hora de la grabación"
@@ -137,6 +135,12 @@ export function RecordingsBar({ camera, bridgeUrl, fecha, position, onSeek }: Pr
           </span>
         ))}
       </div>
+
+      <TimeScrubber
+        spans={spans}
+        position={position}
+        onCommit={(sec) => onSeek(fecha, snap(sec))}
+      />
 
       {error && <p className="rec-msg rec-msg--error">{error}</p>}
       {!error && tramos === null && <p className="rec-msg">Buscando grabaciones…</p>}

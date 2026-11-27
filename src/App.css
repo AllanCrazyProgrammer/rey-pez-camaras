@@ -333,3 +333,37 @@ input, code, pre { font-family: ui-monospace, Consolas, monospace; }
     padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px);
   }
 }
+
+/* Grabaciones: día, saltos y línea de 24 h con lo grabado. */
+.rec-bar { display: grid; gap: 6px; margin-top: 12px; }
+.rec-controls { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; }
+.rec-controls input[type="date"] {
+  padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text); font: inherit; color-scheme: dark;
+}
+.rec-jumps { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.rec-jumps button {
+  padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text); font: inherit; font-size: 0.85rem; cursor: pointer;
+}
+.rec-jumps button:hover:not(:disabled) { border-color: var(--accent); }
+.rec-jumps button:disabled { opacity: 0.5; cursor: default; }
+.rec-time { min-width: 6.5ch; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; font-size: 1.05rem; }
+.rec-line {
+  position: relative; height: 34px; border-radius: 8px; cursor: pointer;
+  background: var(--surface-2); border: 1px solid var(--border); overflow: visible;
+}
+.rec-line:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rec-span { position: absolute; top: 4px; bottom: 4px; background: color-mix(in srgb, var(--ok) 55%, transparent); border-radius: 3px; }
+.rec-cursor { position: absolute; top: -3px; bottom: -3px; width: 3px; margin-left: -1px; background: var(--accent); border-radius: 2px; pointer-events: none; }
+.rec-hover {
+  position: absolute; bottom: calc(100% + 4px); transform: translateX(-50%); pointer-events: none;
+  padding: 1px 6px; border-radius: 4px; font-size: 0.75rem; background: var(--text); color: var(--bg);
+}
+.rec-hours { position: relative; height: 1.1em; font-size: 0.7rem; color: var(--muted); }
+.rec-hours span { position: absolute; transform: translateX(-50%); }
+.rec-hours span:first-child { transform: none; }
+.rec-hours span:last-child { transform: translateX(-100%); }
+.rec-msg { margin: 4px 0 0; color: var(--muted); font-size: 0.9rem; }
+.rec-msg--error { color: var(--danger); }
+.detail-actions .rec-live-btn { border-color: var(--danger); color: var(--text); }

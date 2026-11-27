@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useDigitalZoom } from '../hooks/useDigitalZoom';
 import { ContextMenu, type MenuItem } from './ContextMenu';
 
@@ -7,7 +7,9 @@ const TOUCH_PRIMARY =
 import type { CameraConfig } from '../lib/types';
 import { useHls } from '../hooks/useHls';
 import { BLANK_POSTER } from '../lib/poster';
-import { maskRtspUrlSafe } from '../lib/rtsp';
+import { buildHlsUrl, maskRtspUrlSafe } from '../lib/rtsp';
+import { isoDate, startPlayback } from '../lib/recordings';
+import { RecordingsBar } from './RecordingsBar';
 import { APK_SIN_PLUGINS, captureFrame, deliverSnapshot, snapshotName } from '../lib/snapshot';
 import type { DvrSettings } from '../lib/types';
 import { channelLabel } from '../data/defaultCameras';
@@ -23,7 +25,61 @@ interface Props {
 
 /** Vista grande de una cámara: stream principal (subtype=0) + foto del momento. */
 export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext }: Props) {
-  const { videoRef, status } = useHls(hlsUrl, true);
+  // Grabaciones: null = en vivo. Si no, qué día/hora se pidió y qué stream
+  // de go2rtc (grab1…grab4) la está reproduciendo.
+  const [rec, setRec] = useState<{
+    fecha: string;
+    startSec: number;
+    stream: string | null;
+    nonce: number;
+  } | null>(null);
+  const [recError, setRecError] = useState<string | null>(null);
+  const [position, setPosition] = useState<number | null>(null);
+  const recBase = useRef<number | null>(null);
+
+  const playUrl = rec
+    ? rec.stream
+      ? `${buildHlsUrl(settings.bridgeUrl, rec.stream)}&n=${rec.nonce}`
+      : null
+    : hlsUrl;
+  const { videoRef, status } = useHls(playUrl, true);
+
+  const seek = useCallback(
+    (fecha: string, sec: number) => {
+      const prev = rec?.stream ?? undefined;
+      setRec({ fecha, startSec: sec, stream: null, nonce: Date.now() });
+      setPosition(sec);
+      setRecError(null);
+      startPlayback(settings.bridgeUrl, camera, fecha, sec, prev)
+        .then(({ stream }) =>
+          setRec((r) => (r && r.fecha === fecha && r.startSec === sec ? { ...r, stream } : r)),
+        )
+        .catch((e: Error) => setRecError(e.message));
+    },
+    [camera, rec?.stream, settings.bridgeUrl],
+  );
+
+  const openRecordings = useCallback(() => {
+    // Por default: hoy, 10 minutos antes de ahora.
+    const now = new Date();
+    const sec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+    seek(isoDate(now), Math.max(0, sec - 600));
+  }, [seek]);
+
+  // Hora que se está viendo = hora pedida + lo que lleva reproduciendo.
+  useEffect(() => {
+    recBase.current = null;
+    if (!rec?.stream) return;
+    const video = videoRef.current;
+    if (!video) return;
+    const onTime = () => {
+      if (video.readyState < 2) return;
+      if (recBase.current === null) recBase.current = video.currentTime;
+      setPosition(Math.min(86399, rec.startSec + (video.currentTime - recBase.current)));
+    };
+    video.addEventListener('timeupdate', onTime);
+    return () => video.removeEventListener('timeupdate', onTime);
+  }, [rec?.stream, rec?.nonce, rec?.startSec, videoRef]);
   const [shotMsg, setShotMsg] = useState<string | null>(null);
   const { containerRef, zoom, zoomed, zoomAtClient, reset, handlers, style } = useDigitalZoom();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -163,7 +219,11 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
         )}
         {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={closeMenu} />}
         <span className={`tile-status tile-status--${status}`}>
-          {status === 'playing'
+          {rec && status === 'playing'
+            ? `Grabación · ${rec.fecha === isoDate(new Date()) ? 'hoy' : rec.fecha}`
+            : rec && !rec.stream && !recError
+              ? 'Buscando…'
+            : status === 'playing'
             ? 'En vivo · principal'
             : status === 'error'
               ? 'Sin señal'
@@ -177,7 +237,34 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
         </span>
       </div>
 
+      {rec && (
+        <RecordingsBar
+          camera={camera}
+          bridgeUrl={settings.bridgeUrl}
+          fecha={rec.fecha}
+          position={rec.stream && status === 'playing' ? position : null}
+          onSeek={seek}
+        />
+      )}
+      {recError && <p className="rec-msg rec-msg--error">{recError}</p>}
+
       <div className="detail-actions">
+        {rec ? (
+          <button
+            type="button"
+            className="rec-live-btn"
+            onClick={() => {
+              setRec(null);
+              setRecError(null);
+            }}
+          >
+            ● Volver a en vivo
+          </button>
+        ) : (
+          <button type="button" onClick={openRecordings} disabled={!hlsUrl}>
+            🎞 Grabaciones
+          </button>
+        )}
         <button type="button" onClick={takeSnapshot} disabled={status !== 'playing'}>
           📸 Foto del momento
         </button>

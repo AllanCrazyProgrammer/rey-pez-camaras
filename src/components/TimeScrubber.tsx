@@ -7,6 +7,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  * - La lupa amplía 8x lo que está bajo la aguja y muestra la hora exacta
  *   (ej. 5:59.34 PM = 5:59 y 34 segundos).
  * - Rueda del ratón / pellizco = acercar o alejar (de 2 min a 24 h en pantalla).
+ * - Modo precisión: si el dedo se queda quieto un momento sin soltarlo, la
+ *   línea se acerca 4 veces (cada segundo se ve grande), vibra en cada
+ *   segundo y al soltar queda en el segundo exacto, sin resbalar.
  * - Al soltar (cuando deja de moverse) se pide la grabación de esa hora.
  * Se dibuja en un canvas en cada cuadro para que se mueva fluido. Todo
  * movimiento (arrastre, saltos, zoom, seguir al video) va a un "destino" y lo
@@ -19,6 +22,12 @@ const MIN_SPAN = 30; // segundos visibles con el máximo acercamiento
 const START_SPAN = 60;
 const MAX_SPAN = DAY;
 const LENS_ZOOM = 8; // dentro de la lupa el tiempo se ve 8 veces más cerca
+const LENS_MAX_PX_PER_SEC = 14; // pero sin pasar de 14 px por segundo (se ven ~5 s)
+/** Modo precisión: tiempo quieto para entrar, cuánto se acerca y mínimo visible. */
+const HOLD_MS = 380;
+const HOLD_SLOP_PX = 6;
+const PRECISE_ZOOM = 4;
+const PRECISE_MIN_SPAN = 12;
 const H = 118; // alto en px de CSS
 const STRIP_TOP = 44;
 const STRIP_BOTTOM = H - 18;
@@ -31,9 +40,19 @@ const TICK_STEPS = [1, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
+/** Vibración corta (Android en navegador; donde no hay, no hace nada). */
+function buzz(ms: number) {
+  try {
+    navigator.vibrate?.(ms);
+  } catch {
+    /* sin vibración */
+  }
+}
+
 /** "5:59.34 PM": minutos y, después del punto, los segundos. */
 export function horaLupa(sec: number): string {
-  const s = Math.max(0, Math.min(DAY - 1, Math.floor(sec)));
+  // Redondeado: la aguja sobre la marca de un segundo = ese segundo.
+  const s = Math.max(0, Math.min(DAY - 1, Math.round(sec)));
   const h = Math.floor(s / 3600);
   return `${h % 12 === 0 ? 12 : h % 12}:${pad(Math.floor((s % 3600) / 60))}.${pad(s % 60)} ${h < 12 ? 'AM' : 'PM'}`;
 }
@@ -66,6 +85,7 @@ export function TimeScrubber({ spans, position, advancing = false, onCommit }: P
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [label, setLabel] = useState(() => horaLupa(position ?? 0));
   const [dragging, setDragging] = useState(false);
+  const [precise, setPrecise] = useState(false);
 
   // Estado de la animación en refs (no re-renderiza en cada cuadro).
   const st = useRef({
@@ -80,6 +100,12 @@ export function TimeScrubber({ spans, position, advancing = false, onCommit }: P
     commitTimer: 0 as ReturnType<typeof setTimeout> | 0,
     pointers: new Map<number, number>(), // id → x
     pinchDist: 0,
+    precise: false,
+    holdTimer: 0 as ReturnType<typeof setTimeout> | 0,
+    anchorX: 0, // dónde se quedó quieto el dedo (para detectar "mantener")
+    spanBefore: 0, // acercamiento antes del modo precisión
+    lastBuzzSec: 0,
+    lastBuzzAt: 0,
     downX: 0,
     moved: false,
     target: position,
@@ -96,17 +122,23 @@ export function TimeScrubber({ spans, position, advancing = false, onCommit }: P
 
   const clampCenter = (c: number) => Math.max(0, Math.min(DAY - 1, c));
 
+  // onCommit cambia en cada render del padre (el video avisa la hora ~4 veces
+  // por segundo); se guarda en un ref para no volver a conectar el arrastre
+  // a media acción (eso perdía la posición del dedo y daba brincos).
+  const commitRef = useRef(onCommit);
+  commitRef.current = onCommit;
+
   const scheduleCommit = useCallback(() => {
     const s = st.current;
     if (s.commitTimer) clearTimeout(s.commitTimer);
     s.commitTimer = setTimeout(() => {
       s.commitTimer = 0;
       if (s.interacting || Math.abs(s.vel) > 0.0005) return scheduleCommit();
-      onCommit(Math.floor(s.goal));
+      commitRef.current(Math.max(0, Math.min(DAY - 1, Math.round(s.goal))));
       // Se deja de seguir al video unos segundos mientras carga la nueva hora.
       s.lastMove = performance.now();
     }, 450);
-  }, [onCommit]);
+  }, []);
 
   // Bucle de dibujo.
   useEffect(() => {
@@ -201,7 +233,7 @@ export function TimeScrubber({ spans, position, advancing = false, onCommit }: P
       }
       ctx.globalAlpha = 1;
       const minor = TICK_STEPS.find((v) => v / spp >= 5) ?? 21600;
-      const major = TICK_STEPS.find((v) => v / spp >= 62 && v % minor === 0) ?? 21600;
+      const major = TICK_STEPS.find((v) => v / spp >= 30 && v % minor === 0) ?? 21600;
       ctx.strokeStyle = C.text;
       ctx.fillStyle = C.text;
       ctx.font = '700 11px system-ui, sans-serif';
@@ -210,8 +242,9 @@ export function TimeScrubber({ spans, position, advancing = false, onCommit }: P
       for (let t = Math.ceil(Math.max(0, tFrom) / minor) * minor; t <= Math.min(DAY, tTo); t += minor) {
         const px = Math.round(x(t)) + 0.5;
         const isMajor = t % major === 0;
-        ctx.moveTo(px, top + 4);
-        ctx.lineTo(px, top + (isMajor ? 22 : 12));
+        // Marcas a media altura: arriba el círculo es angosto y las cortaba.
+        ctx.moveTo(px, cy - (isMajor ? 22 : 16));
+        ctx.lineTo(px, cy - 6);
         if (isMajor) ctx.fillText(tickLabel(t, major), px, cy + 6);
       }
       ctx.lineWidth = 1;
@@ -271,7 +304,7 @@ export function TimeScrubber({ spans, position, advancing = false, onCommit }: P
       ctx.beginPath();
       ctx.arc(cx, cy, LENS_R, 0, Math.PI * 2);
       ctx.clip();
-      drawLens(cx, cy, s.center, s.span / w / LENS_ZOOM);
+      drawLens(cx, cy, s.center, Math.max(s.span / w / LENS_ZOOM, 1 / LENS_MAX_PX_PER_SEC));
       ctx.restore();
       // Brillo de vidrio
       const glass = ctx.createRadialGradient(cx - 16, cy - 18, 2, cx - 8, cy - 8, LENS_R);
@@ -282,9 +315,16 @@ export function TimeScrubber({ spans, position, advancing = false, onCommit }: P
       ctx.beginPath();
       ctx.arc(cx, cy, LENS_R, 0, Math.PI * 2);
       ctx.fill();
-      ctx.lineWidth = 3;
+      ctx.lineWidth = s.precise ? 5 : 3;
       ctx.strokeStyle = C.accent;
       ctx.stroke();
+      if (s.precise) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, LENS_R + 5, 0, Math.PI * 2);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+        ctx.stroke();
+      }
       // Aguja
       ctx.fillStyle = C.accent;
       ctx.fillRect(Math.round(cx) - 1, STRIP_TOP - 6, 2, STRIP_BOTTOM - STRIP_TOP + 12);
@@ -314,7 +354,38 @@ export function TimeScrubber({ spans, position, advancing = false, onCommit }: P
     let lastT = 0;
 
     const zoomBy = (factor: number) => {
-      s.spanGoal = Math.max(MIN_SPAN, Math.min(MAX_SPAN, s.spanGoal * factor));
+      s.spanGoal = Math.max(s.precise ? PRECISE_MIN_SPAN : MIN_SPAN, Math.min(MAX_SPAN, s.spanGoal * factor));
+    };
+    const clearHold = () => {
+      if (s.holdTimer) clearTimeout(s.holdTimer);
+      s.holdTimer = 0;
+    };
+    /** Arranca (o reinicia) la espera para entrar a modo precisión. */
+    const armHold = (x: number) => {
+      clearHold();
+      s.anchorX = x;
+      if (s.precise || s.pointers.size !== 1) return;
+      s.holdTimer = setTimeout(() => {
+        s.holdTimer = 0;
+        if (!s.interacting || s.pointers.size !== 1 || s.precise) return;
+        s.precise = true;
+        s.vel = 0;
+        s.goal = s.center; // se queda justo donde se ve
+        s.spanBefore = s.spanGoal;
+        s.spanGoal = Math.max(PRECISE_MIN_SPAN, s.spanGoal / PRECISE_ZOOM);
+        s.lastBuzzSec = Math.round(s.goal);
+        setPrecise(true);
+        buzz(15);
+      }, HOLD_MS);
+    };
+    const exitPrecise = () => {
+      if (!s.precise) return;
+      s.precise = false;
+      s.vel = 0;
+      s.goal = Math.round(s.goal); // queda en el segundo exacto
+      s.ease = EASE_JUMP;
+      if (s.spanBefore) s.spanGoal = s.spanBefore;
+      setPrecise(false);
     };
     const onDown = (e: PointerEvent) => {
       el.setPointerCapture(e.pointerId);
@@ -331,6 +402,7 @@ export function TimeScrubber({ spans, position, advancing = false, onCommit }: P
         const [a, b] = [...s.pointers.values()];
         s.pinchDist = Math.abs(a - b);
       }
+      armHold(e.clientX);
       setDragging(true);
     };
     const onMove = (e: PointerEvent) => {
@@ -343,18 +415,30 @@ export function TimeScrubber({ spans, position, advancing = false, onCommit }: P
         if (s.pinchDist > 10 && d > 10) zoomBy(s.pinchDist / d);
         s.pinchDist = d;
         s.moved = true;
+        clearHold();
         return;
       }
+      // Si el dedo se mueve, se vuelve a esperar a que se quede quieto.
+      if (!s.precise && Math.abs(e.clientX - s.anchorX) > HOLD_SLOP_PX) armHold(e.clientX);
       const now = performance.now();
       const dx = e.clientX - lastX;
       if (Math.abs(e.clientX - s.downX) > 4) s.moved = true;
       const dSec = (-dx * s.span) / w;
       s.goal = clampCenter(s.goal + dSec);
       s.ease = EASE_DRAG;
+      if (s.precise) {
+        // Un toquecito de vibración por cada segundo que pasa.
+        const sec = Math.round(s.goal);
+        if (sec !== s.lastBuzzSec && now - s.lastBuzzAt > 35) {
+          buzz(4);
+          s.lastBuzzAt = now;
+        }
+        s.lastBuzzSec = sec;
+      }
       const dt = Math.max(1, now - lastT);
       // Inercia con tope: un "aventón" recorre como mucho ~1 ancho de pantalla
       // (para no perder la hora que se estaba buscando).
-      const vMax = (2.5 * s.span) / w;
+      const vMax = s.precise ? 0 : (2.5 * s.span) / w; // en precisión no resbala
       s.vel = Math.max(-vMax, Math.min(vMax, 0.8 * (dSec / dt) + 0.2 * s.vel));
       lastX = e.clientX;
       lastT = now;
@@ -363,8 +447,16 @@ export function TimeScrubber({ spans, position, advancing = false, onCommit }: P
     const onUp = (e: PointerEvent) => {
       s.pointers.delete(e.pointerId);
       if (s.pointers.size > 0) return;
+      clearHold();
       s.interacting = false;
       setDragging(false);
+      if (s.precise) {
+        exitPrecise();
+        s.lastMove = performance.now();
+        // Solo mantener sin mover: no se vuelve a pedir la misma hora.
+        if (s.moved) scheduleCommit();
+        return;
+      }
       if (performance.now() - lastT > 80) s.vel = 0; // se detuvo antes de soltar
       if (!s.moved) {
         // Toque sin arrastrar: lleva esa hora al centro.
@@ -392,7 +484,12 @@ export function TimeScrubber({ spans, position, advancing = false, onCommit }: P
     el.addEventListener('pointerup', onUp);
     el.addEventListener('pointercancel', onUp);
     el.addEventListener('wheel', onWheel, { passive: false });
+    // Mantener el dedo no debe abrir el menú del sistema.
+    const noMenu = (e: Event) => e.preventDefault();
+    el.addEventListener('contextmenu', noMenu);
     return () => {
+      clearHold();
+      el.removeEventListener('contextmenu', noMenu);
       el.removeEventListener('pointerdown', onDown);
       el.removeEventListener('pointermove', onMove);
       el.removeEventListener('pointerup', onUp);
@@ -421,7 +518,7 @@ export function TimeScrubber({ spans, position, advancing = false, onCommit }: P
     <div className="scrubber">
       <div
         ref={wrapRef}
-        className={`scrubber-track${dragging ? ' scrubber-track--drag' : ''}`}
+        className={`scrubber-track${dragging ? ' scrubber-track--drag' : ''}${precise ? ' scrubber-track--precise' : ''}`}
         role="slider"
         tabIndex={0}
         aria-label="Hora de la grabación: arrastra para elegir"
@@ -437,6 +534,7 @@ export function TimeScrubber({ spans, position, advancing = false, onCommit }: P
       >
         <canvas ref={canvasRef} />
         <span className="scrubber-lupa" aria-hidden="true">
+          {precise && <span className="scrubber-lupa-tag">🎯</span>}
           {label}
         </span>
       </div>
@@ -454,7 +552,9 @@ export function TimeScrubber({ spans, position, advancing = false, onCommit }: P
             {txt}
           </button>
         ))}
-        <span className="scrubber-hint">Arrastra para elegir el segundo · la lupa marca la hora</span>
+        <span className="scrubber-hint">{precise
+            ? 'Precisión: mueve despacio y suelta en el segundo'
+            : 'Arrastra · deja el dedo quieto para precisión'}</span>
       </div>
     </div>
   );

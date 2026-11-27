@@ -451,6 +451,11 @@ input, code, pre { font-family: ui-monospace, Consolas, monospace; }
   border: 1px solid var(--border); cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
 }
 .scrubber-track--drag { cursor: grabbing; }
+.scrubber-track { -webkit-touch-callout: none; }
+.scrubber-track--precise { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
+.scrubber-track--precise .scrubber-lupa { transform: translateX(-50%) scale(1.12); }
+.scrubber-lupa { transition: transform 0.15s ease; }
+.scrubber-lupa-tag { margin-right: 6px; }
 .scrubber-track:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .scrubber-track canvas { display: block; width: 100%; height: 118px; }
 .scrubber-lupa {

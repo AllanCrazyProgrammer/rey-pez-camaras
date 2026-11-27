@@ -89,3 +89,34 @@ export function startPlayback(
   if (liberar) params.liberar = liberar;
   return call<{ stream: string }>(endpoint(bridgeUrl, params));
 }
+
+/**
+ * Hora escrita por el usuario → segundos del día. Acepta "5:37", "5.37",
+ * "537", "5:37:20", "5:37 pm", "5:37p" y también "17:37". Si no trae AM/PM,
+ * usa `ampm`. Devuelve null si no se entiende.
+ */
+export function parseHora(texto: string, ampm: 'AM' | 'PM'): number | null {
+  const t = texto.trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!t) return null;
+  const m = t.match(/^(\d{1,2})(?:[:.h ](\d{1,2}))?(?:[:.](\d{1,2}))?\s*(a|p)?\.?\s*m?\.?$/);
+  let h: number, min: number, sec = 0, suf: string | undefined;
+  if (m) {
+    h = Number(m[1]);
+    min = m[2] === undefined ? 0 : Number(m[2]);
+    sec = m[3] === undefined ? 0 : Number(m[3]);
+    suf = m[4];
+  } else {
+    // "537" o "0537" (sin separador)
+    const d = t.match(/^(\d{3,4})\s*(a|p)?\.?\s*m?\.?$/);
+    if (!d) return null;
+    h = Number(d[1].slice(0, -2));
+    min = Number(d[1].slice(-2));
+    suf = d[2];
+  }
+  if (min > 59 || sec > 59 || h > 23) return null;
+  if (h > 12 || (h === 0 && !suf)) return h * 3600 + min * 60 + sec; // ya viene en 24 h
+  if (h === 0) h = 12;
+  const pm = suf ? suf === 'p' : ampm === 'PM';
+  const h24 = (h % 12) + (pm ? 12 : 0);
+  return h24 * 3600 + min * 60 + sec;
+}

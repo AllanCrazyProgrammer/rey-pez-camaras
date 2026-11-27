@@ -8,7 +8,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  *   (ej. 5:59.34 PM = 5:59 y 34 segundos).
  * - Rueda del ratón / pellizco = acercar o alejar (de 2 min a 24 h en pantalla).
  * - Al soltar (cuando deja de moverse) se pide la grabación de esa hora.
- * Se dibuja en un canvas en cada cuadro para que se mueva fluido.
+ * Se dibuja en un canvas en cada cuadro para que se mueva fluido. Todo
+ * movimiento (arrastre, saltos, zoom, seguir al video) va a un "destino" y lo
+ * que se ve se acerca a él con suavidad, así nunca brinca de golpe.
  */
 
 const DAY = 86400;
@@ -19,6 +21,10 @@ const H = 118; // alto en px de CSS
 const STRIP_TOP = 44;
 const STRIP_BOTTOM = H - 18;
 const LENS_R = 40;
+/** Qué tan rápido alcanza lo que se ve a su destino (ms; menor = más pegado). */
+const EASE_DRAG = 28;
+const EASE_JUMP = 170;
+const EASE_ZOOM = 140;
 const TICK_STEPS = [1, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 10800, 21600];
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -45,11 +51,13 @@ interface Props {
   spans: ReadonlyArray<readonly [number, number]>;
   /** Hora que se está reproduciendo (null = cargando). */
   position: number | null;
+  /** true mientras el video corre (la hora avanza sola entre avisos). */
+  advancing?: boolean;
   /** Se llama al soltar con la hora elegida. */
   onCommit: (sec: number) => void;
 }
 
-export function TimeScrubber({ spans, position, onCommit }: Props) {
+export function TimeScrubber({ spans, position, advancing = false, onCommit }: Props) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [label, setLabel] = useState(() => horaLupa(position ?? 0));
@@ -57,8 +65,11 @@ export function TimeScrubber({ spans, position, onCommit }: Props) {
 
   // Estado de la animación en refs (no re-renderiza en cada cuadro).
   const st = useRef({
-    center: position ?? 12 * 3600,
+    center: position ?? 12 * 3600, // lo que se ve
+    goal: position ?? 12 * 3600, // a donde va
+    ease: EASE_JUMP,
     span: 0, // segundos visibles a lo ancho (se ajusta al ancho al empezar)
+    spanGoal: 0,
     vel: 0, // segundos por ms (inercia)
     interacting: false,
     lastMove: 0,
@@ -68,10 +79,16 @@ export function TimeScrubber({ spans, position, onCommit }: Props) {
     downX: 0,
     moved: false,
     target: position,
+    targetAt: 0, // cuándo llegó la hora del video (para adelantarla entre avisos)
+    advancing,
     spans,
   });
   st.current.spans = spans;
-  st.current.target = position;
+  st.current.advancing = advancing;
+  if (st.current.target !== position) {
+    st.current.target = position;
+    st.current.targetAt = performance.now();
+  }
 
   const clampCenter = (c: number) => Math.max(0, Math.min(DAY - 1, c));
 
@@ -81,7 +98,7 @@ export function TimeScrubber({ spans, position, onCommit }: Props) {
     s.commitTimer = setTimeout(() => {
       s.commitTimer = 0;
       if (s.interacting || Math.abs(s.vel) > 0.0005) return scheduleCommit();
-      onCommit(Math.floor(s.center));
+      onCommit(Math.floor(s.goal));
       // Se deja de seguir al video unos segundos mientras carga la nueva hora.
       s.lastMove = performance.now();
     }, 450);
@@ -197,17 +214,34 @@ export function TimeScrubber({ spans, position, onCommit }: Props) {
         canvas.style.height = `${H}px`;
       }
       // Acercamiento inicial según el ancho: celular ~18 min, computadora ~50 min.
-      if (!s.span) s.span = Math.max(900, Math.min(3600, Math.round(w * 3)));
-      // Inercia
+      if (!s.span) s.span = s.spanGoal = Math.max(900, Math.min(3600, Math.round(w * 3)));
+      // Inercia (mueve el destino; lo que se ve lo sigue suave).
       if (!s.interacting && Math.abs(s.vel) > 0.00001) {
-        s.center = clampCenter(s.center + s.vel * dt);
-        s.vel *= Math.pow(0.92, dt / 16);
-        if (Math.abs(s.vel) < 0.0005) s.vel = 0;
+        s.goal = clampCenter(s.goal + s.vel * dt);
+        s.ease = EASE_DRAG;
+        s.vel *= Math.pow(0.94, dt / 16);
+        if (Math.abs(s.vel) < 0.0004) s.vel = 0;
       }
-      // Seguir al video cuando nadie lo toca (y no se acaba de elegir hora).
+      // Seguir al video cuando nadie lo toca: la hora avanza sola entre un
+      // aviso y otro del video, así la línea corre parejo y no a saltitos.
       if (!s.interacting && !s.vel && !s.commitTimer && s.target !== null && t - s.lastMove > 2500) {
-        const d = s.target - s.center;
-        s.center = Math.abs(d) > 90 ? s.target : s.center + d * Math.min(1, dt / 120);
+        const ahead = s.advancing ? Math.min(1, Math.max(0, (t - s.targetAt) / 1000)) : 0;
+        const want = clampCenter(s.target + ahead);
+        if (Math.abs(want - s.goal) > 0.05) {
+          // Lejos (otro tramo, otra hora): viaje suave; cerca: ir pegado.
+          s.ease = Math.abs(want - s.goal) > 5 ? EASE_JUMP * 1.3 : EASE_JUMP;
+          s.goal = want;
+        }
+      }
+      // Acercar lo que se ve a su destino (suavizado exponencial, igual a
+      // cualquier velocidad de pantalla).
+      const k = 1 - Math.exp(-dt / s.ease);
+      const gap = s.goal - s.center;
+      s.center = Math.abs(gap) < 0.01 ? s.goal : s.center + gap * k;
+      if (s.span !== s.spanGoal) {
+        const kz = 1 - Math.exp(-dt / EASE_ZOOM);
+        const ls = Math.log(s.span) + (Math.log(s.spanGoal) - Math.log(s.span)) * kz;
+        s.span = Math.abs(ls - Math.log(s.spanGoal)) < 0.002 ? s.spanGoal : Math.exp(ls);
       }
 
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -264,13 +298,15 @@ export function TimeScrubber({ spans, position, onCommit }: Props) {
     let lastT = 0;
 
     const zoomBy = (factor: number) => {
-      s.span = Math.max(MIN_SPAN, Math.min(MAX_SPAN, s.span * factor));
+      s.spanGoal = Math.max(MIN_SPAN, Math.min(MAX_SPAN, s.spanGoal * factor));
     };
     const onDown = (e: PointerEvent) => {
       el.setPointerCapture(e.pointerId);
       s.pointers.set(e.pointerId, e.clientX);
       s.interacting = true;
       s.vel = 0;
+      // Tomar la línea la detiene donde se ve, sin seguir resbalando.
+      s.goal = s.center;
       s.moved = false;
       s.downX = e.clientX;
       lastX = e.clientX;
@@ -297,9 +333,13 @@ export function TimeScrubber({ spans, position, onCommit }: Props) {
       const dx = e.clientX - lastX;
       if (Math.abs(e.clientX - s.downX) > 4) s.moved = true;
       const dSec = (-dx * s.span) / w;
-      s.center = clampCenter(s.center + dSec);
+      s.goal = clampCenter(s.goal + dSec);
+      s.ease = EASE_DRAG;
       const dt = Math.max(1, now - lastT);
-      s.vel = 0.8 * (dSec / dt) + 0.2 * s.vel;
+      // Inercia con tope: un "aventón" recorre como mucho ~1 ancho de pantalla
+      // (para no perder la hora que se estaba buscando).
+      const vMax = (2.5 * s.span) / w;
+      s.vel = Math.max(-vMax, Math.min(vMax, 0.8 * (dSec / dt) + 0.2 * s.vel));
       lastX = e.clientX;
       lastT = now;
       s.lastMove = now;
@@ -313,7 +353,8 @@ export function TimeScrubber({ spans, position, onCommit }: Props) {
       if (!s.moved) {
         // Toque sin arrastrar: lleva esa hora al centro.
         const r = el.getBoundingClientRect();
-        s.center = clampCenter(s.center + ((e.clientX - r.left - r.width / 2) * s.span) / r.width);
+        s.goal = clampCenter(s.goal + ((e.clientX - r.left - r.width / 2) * s.span) / r.width);
+        s.ease = EASE_JUMP;
         s.vel = 0;
       }
       s.lastMove = performance.now();
@@ -324,7 +365,8 @@ export function TimeScrubber({ spans, position, onCommit }: Props) {
       if (e.ctrlKey || Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
         zoomBy(Math.exp(e.deltaY * 0.002)); // rueda = acercar/alejar
       } else {
-        s.center = clampCenter(s.center + (e.deltaX * s.span) / (el.clientWidth || 1));
+        s.goal = clampCenter(s.goal + (e.deltaX * s.span) / (el.clientWidth || 1));
+        s.ease = EASE_DRAG * 2;
         s.lastMove = performance.now();
         scheduleCommit();
       }
@@ -348,12 +390,13 @@ export function TimeScrubber({ spans, position, onCommit }: Props) {
   }, []);
 
   const setSpan = (span: number) => {
-    st.current.span = span;
+    st.current.spanGoal = span;
   };
   const nudge = (sec: number) => {
     const s = st.current;
     s.vel = 0;
-    s.center = clampCenter(s.center + sec);
+    s.goal = clampCenter(s.goal + sec);
+    s.ease = EASE_JUMP;
     s.lastMove = performance.now();
     scheduleCommit();
   };
@@ -368,7 +411,7 @@ export function TimeScrubber({ spans, position, onCommit }: Props) {
         aria-label="Hora de la grabación: arrastra para elegir"
         aria-valuemin={0}
         aria-valuemax={DAY}
-        aria-valuenow={Math.floor(st.current.center)}
+        aria-valuenow={Math.floor(st.current.goal)}
         aria-valuetext={label}
         onKeyDown={(e) => {
           const step = e.shiftKey ? 60 : 10;

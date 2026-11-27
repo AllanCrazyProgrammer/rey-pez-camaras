@@ -11,9 +11,25 @@ import { buildHlsUrl, maskRtspUrlSafe } from '../lib/rtsp';
 import { isoDate, startPlayback } from '../lib/recordings';
 import { CLIP_FOLDER, recordingSupported, saveClip, startClip, type ClipRecorder } from '../lib/clipRecorder';
 import { RecordingsBar } from './RecordingsBar';
+import { horaLupa } from './TimeScrubber';
 import { APK_SIN_PLUGINS, captureFrame, deliverSnapshot, snapshotName } from '../lib/snapshot';
 import type { DvrSettings } from '../lib/types';
 import { channelLabel } from '../data/defaultCameras';
+
+/** Cuadro actual del video en chico (para dejarlo en pantalla mientras salta). */
+function grabFrame(video: HTMLVideoElement | null): string | null {
+  if (!video || video.readyState < 2 || !video.videoWidth) return null;
+  try {
+    const w = Math.min(960, video.videoWidth);
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = Math.round((video.videoHeight / video.videoWidth) * w);
+    canvas.getContext('2d')?.drawImage(video, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.8);
+  } catch {
+    return null;
+  }
+}
 
 interface Props {
   camera: CameraConfig;
@@ -46,6 +62,15 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
   const clipRef = useRef(clip);
   clipRef.current = clip;
   const [, setTick] = useState(0);
+  // Transición al saltar de hora: el último cuadro se queda (desenfocado) con
+  // la hora a la que se va, y se desvanece cuando llega el video nuevo.
+  const [seekFx, setSeekFx] = useState<{
+    frame: string | null;
+    dir: -1 | 0 | 1;
+    label: string;
+    out: boolean;
+  } | null>(null);
+  const seekFxTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const playUrl = paused
     ? null
@@ -59,6 +84,16 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
   const seek = useCallback(
     (fecha: string, sec: number) => {
       const prev = rec?.stream ?? undefined;
+      const from = paused?.pos ?? position;
+      const frame = paused?.frame ?? grabFrame(videoRef.current);
+      if (seekFxTimer.current) clearTimeout(seekFxTimer.current);
+      setSeekFx((f) => ({
+        // Si ya estaba saltando (video sin imagen), se queda el cuadro anterior.
+        frame: frame ?? f?.frame ?? null,
+        dir: !rec || from === null || rec.fecha !== fecha ? 0 : sec < from ? -1 : sec > from ? 1 : 0,
+        label: horaLupa(sec),
+        out: false,
+      }));
       setRec({ fecha, startSec: sec, stream: null, nonce: Date.now() });
       if (paused) {
         setPaused(null);
@@ -72,7 +107,7 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
         )
         .catch((e: Error) => setRecError(e.message));
     },
-    [camera, paused, rec?.stream, settings.bridgeUrl],
+    [camera, paused, position, rec, settings.bridgeUrl, videoRef],
   );
 
   const togglePause = () => {
@@ -164,12 +199,31 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
     if (!video) return;
     const onTime = () => {
       if (video.readyState < 2) return;
-      if (recBase.current === null) recBase.current = video.currentTime;
+      if (recBase.current === null) {
+        // El inicio de lo recibido es la hora pedida (el reproductor puede
+        // arrancar un poco más adelante para ir casi en tiempo real).
+        recBase.current =
+          video.buffered.length && video.buffered.start(0) <= video.currentTime
+            ? video.buffered.start(0)
+            : video.currentTime;
+        // Ya hay imagen nueva: se desvanece el cuadro anterior.
+        setSeekFx((f) => (f ? { ...f, out: true } : f));
+        if (seekFxTimer.current) clearTimeout(seekFxTimer.current);
+        seekFxTimer.current = setTimeout(() => setSeekFx(null), 450);
+      }
       setPosition(Math.min(86399, rec.startSec + (video.currentTime - recBase.current)));
     };
     video.addEventListener('timeupdate', onTime);
     return () => video.removeEventListener('timeupdate', onTime);
   }, [rec?.stream, rec?.nonce, rec?.startSec, videoRef]);
+
+  // Sin grabación o con error, no se queda el cuadro congelado.
+  useEffect(() => {
+    if (!rec || recError) setSeekFx(null);
+  }, [rec, recError]);
+  useEffect(() => () => {
+    if (seekFxTimer.current) clearTimeout(seekFxTimer.current);
+  }, []);
   const [shotMsg, setShotMsg] = useState<string | null>(null);
   const { containerRef, zoom, zoomed, zoomAtClient, reset, handlers, style } = useDigitalZoom();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -288,6 +342,14 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
               aria-label={camera.name}
             />
             {paused?.frame && <img className="pause-frame" src={paused.frame} alt="" />}
+            {seekFx && !paused && (
+              <div
+                className={`seek-fx seek-fx--${seekFx.dir < 0 ? 'back' : seekFx.dir > 0 ? 'fwd' : 'none'}${seekFx.out ? ' seek-fx--out' : ''}`}
+                aria-hidden="true"
+              >
+                {seekFx.frame && <img src={seekFx.frame} alt="" />}
+              </div>
+            )}
           </div>
         ) : (
           <div className="detail-no-signal">
@@ -311,6 +373,11 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
         )}
         {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={closeMenu} />}
         {clip && <span className="clip-badge">● REC {clipTime}</span>}
+        {seekFx && !paused && !seekFx.out && (
+          <span className="seek-chip" role="status">
+            {seekFx.dir < 0 ? '⏪' : seekFx.dir > 0 ? '⏩' : '⏱'} {seekFx.label}
+          </span>
+        )}
         <span className={`tile-status tile-status--${paused ? 'idle' : status}`}>
           {paused
             ? 'En pausa'
@@ -337,7 +404,8 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
           camera={camera}
           bridgeUrl={settings.bridgeUrl}
           fecha={rec.fecha}
-          position={paused ? paused.pos : rec.stream && status === 'playing' ? position : null}
+          position={paused ? paused.pos : rec.stream && status === 'playing' ? position : rec.startSec}
+          advancing={!paused && !!rec.stream && status === 'playing'}
           onSeek={seek}
         />
       )}

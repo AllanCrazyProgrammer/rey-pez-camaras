@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CameraConfig } from '../lib/types';
-import { fetchTramos, hora12, isoDate, toSec, type Tramo } from '../lib/recordings';
+import { fetchTramos, hora12, isoDate, parseHora, toSec, type Tramo } from '../lib/recordings';
 import { TimeScrubber } from './TimeScrubber';
 
 interface Props {
@@ -9,6 +9,8 @@ interface Props {
   fecha: string;
   /** Segundo del día que se está viendo (null mientras carga). */
   position: number | null;
+  /** true mientras el video corre. */
+  advancing?: boolean;
   onSeek: (fecha: string, sec: number) => void;
 }
 
@@ -18,11 +20,17 @@ const DAY = 86400;
  * Barra de grabaciones: día, saltos de ±1 / ±10 min, resumen de las 24 h
  * (tocarlo brinca a esa hora) y el deslizador fino con lupa.
  */
-export function RecordingsBar({ camera, bridgeUrl, fecha, position, onSeek }: Props) {
+export function RecordingsBar({ camera, bridgeUrl, fecha, position, advancing, onSeek }: Props) {
   const [tramos, setTramos] = useState<Tramo[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hover, setHover] = useState<number | null>(null);
   const lineRef = useRef<HTMLDivElement | null>(null);
+  // "Ir a una hora": se escribe 5:37 y se elige AM o PM.
+  const [goOpen, setGoOpen] = useState(false);
+  const [goText, setGoText] = useState('');
+  const [goAmpm, setGoAmpm] = useState<'AM' | 'PM'>('AM');
+  const [goError, setGoError] = useState<string | null>(null);
+  const goInput = useRef<HTMLInputElement | null>(null);
   const today = isoDate(new Date());
   // Solo DVR y canal: renombrar la cámara no debe volver a buscar.
   const { dvr, channel } = camera;
@@ -55,6 +63,29 @@ export function RecordingsBar({ camera, bridgeUrl, fecha, position, onSeek }: Pr
     const r = lineRef.current?.getBoundingClientRect();
     if (!r) return 0;
     return Math.min(DAY - 1, Math.max(0, ((clientX - r.left) / r.width) * DAY));
+  };
+
+  const openGo = () => {
+    if (goOpen) return setGoOpen(false);
+    // Empieza con la hora que se está viendo, ej. "5:37" + PM.
+    const base = position ?? 8 * 3600;
+    const [hm, ap] = hora12(base, false).split(' ');
+    setGoText(hm);
+    setGoAmpm(ap === 'PM' ? 'PM' : 'AM');
+    setGoError(null);
+    setGoOpen(true);
+    requestAnimationFrame(() => goInput.current?.select());
+  };
+
+  const submitGo = () => {
+    const sec = parseHora(goText, goAmpm);
+    if (sec === null) {
+      setGoError('Escríbela así: 5:37 (o 5.37) y elige AM o PM.');
+      return;
+    }
+    setGoError(null);
+    setGoOpen(false);
+    onSeek(fecha, snap(sec));
   };
 
   const jump = (delta: number) => {
@@ -91,7 +122,62 @@ export function RecordingsBar({ camera, bridgeUrl, fecha, position, onSeek }: Pr
             10 min »
           </button>
         </div>
+        <button
+          type="button"
+          className={`rec-go-btn${goOpen ? ' rec-go-btn--on' : ''}`}
+          aria-expanded={goOpen}
+          onClick={openGo}
+        >
+          🕐 Ir a hora
+        </button>
       </div>
+
+      {goOpen && (
+        <form
+          className="rec-go"
+          onSubmit={(e) => {
+            e.preventDefault();
+            submitGo();
+          }}
+        >
+          <input
+            ref={goInput}
+            type="text"
+            inputMode="decimal"
+            autoComplete="off"
+            enterKeyHint="go"
+            placeholder="5:37"
+            aria-label="Hora, por ejemplo 5:37"
+            value={goText}
+            onChange={(e) => {
+              const v = e.target.value;
+              setGoText(v);
+              setGoError(null);
+              // Si escriben "pm" o "am" en el texto, se marca solo.
+              const suf = v.toLowerCase().match(/(a|p)\.?\s*m?\.?\s*$/);
+              if (suf) setGoAmpm(suf[1] === 'p' ? 'PM' : 'AM');
+            }}
+          />
+          <div className="rec-go-ampm" role="radiogroup" aria-label="AM o PM">
+            {(['AM', 'PM'] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                role="radio"
+                aria-checked={goAmpm === v}
+                className={goAmpm === v ? 'is-on' : ''}
+                onClick={() => setGoAmpm(v)}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+          <button type="submit" className="rec-go-submit">
+            Ir
+          </button>
+          {goError && <p className="rec-msg rec-msg--error rec-go-error">{goError}</p>}
+        </form>
+      )}
 
       <div
         ref={lineRef}
@@ -139,6 +225,7 @@ export function RecordingsBar({ camera, bridgeUrl, fecha, position, onSeek }: Pr
       <TimeScrubber
         spans={spans}
         position={position}
+        advancing={advancing}
         onCommit={(sec) => onSeek(fecha, snap(sec))}
       />
 

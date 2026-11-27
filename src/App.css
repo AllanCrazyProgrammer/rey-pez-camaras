@@ -348,6 +348,62 @@ input, code, pre { font-family: ui-monospace, Consolas, monospace; }
 }
 .rec-jumps button:hover:not(:disabled) { border-color: var(--accent); }
 .rec-jumps button:disabled { opacity: 0.5; cursor: default; }
+.rec-go-btn {
+  padding: 7px 12px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text); font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer;
+}
+.rec-go-btn:hover, .rec-go-btn--on { border-color: var(--accent); }
+.rec-go-btn--on { background: var(--accent); color: #fff; }
+.rec-go {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px;
+  border: 1px solid var(--accent); border-radius: 10px; background: var(--surface-2);
+  animation: rec-go-in 0.18s ease-out;
+}
+@keyframes rec-go-in { from { opacity: 0; transform: translateY(-4px); } }
+.rec-go input {
+  width: 6.5ch; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); font: inherit; font-size: 1.25rem; font-weight: 800;
+  font-variant-numeric: tabular-nums; text-align: center;
+}
+.rec-go input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.rec-go-ampm { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.rec-go-ampm button {
+  padding: 9px 14px; border: 0; background: transparent; color: var(--muted);
+  font: inherit; font-weight: 800; cursor: pointer;
+}
+.rec-go-ampm button.is-on { background: var(--accent); color: #fff; }
+.rec-go-submit {
+  padding: 9px 18px; border-radius: 8px; border: 0; background: var(--accent); color: #fff;
+  font: inherit; font-weight: 800; cursor: pointer;
+}
+.rec-go-error { flex-basis: 100%; margin: 0; }
+
+/* Al saltar de hora: el cuadro anterior se queda desenfocado, se desliza un
+   poco hacia el lado del salto y se desvanece cuando llega el video nuevo. */
+.seek-fx { position: absolute; inset: 0; overflow: hidden; pointer-events: none; background: #000; transition: opacity 0.4s ease; }
+.seek-fx img {
+  width: 100%; height: 100%; object-fit: contain; display: block;
+  filter: blur(3px) brightness(0.6) saturate(0.8); transform: scale(1.03);
+  transition: transform 1.2s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.seek-fx--back img { animation: seek-back 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.seek-fx--fwd img { animation: seek-fwd 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+@keyframes seek-back { from { transform: scale(1); filter: none; } to { transform: translateX(4%) scale(1.03); } }
+@keyframes seek-fwd { from { transform: scale(1); filter: none; } to { transform: translateX(-4%) scale(1.03); } }
+.seek-fx--out { opacity: 0; }
+.seek-chip {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none;
+  padding: 8px 16px; border-radius: 999px; background: rgba(0, 0, 0, 0.6); color: #fff;
+  font-size: 1.15rem; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap;
+  border: 2px solid var(--accent); backdrop-filter: blur(4px);
+  animation: seek-chip-in 0.2s ease-out, seek-chip-pulse 1.4s ease-in-out 0.2s infinite;
+}
+@keyframes seek-chip-in { from { opacity: 0; transform: translate(-50%, -40%); } }
+@keyframes seek-chip-pulse { 50% { border-color: rgba(255, 255, 255, 0.5); } }
+@media (prefers-reduced-motion: reduce) {
+  .seek-fx img, .seek-fx--back img, .seek-fx--fwd img { animation: none; transform: none; }
+  .seek-chip, .rec-go { animation: none; }
+}
 .rec-time { min-width: 10ch; white-space: nowrap; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; font-size: 1.05rem; }
 .rec-line {
   position: relative; height: 34px; border-radius: 8px; cursor: pointer;

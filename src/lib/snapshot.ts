@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { galleryAvailable, saveToGallery } from './gallery';
 
 /**
  * "Foto del momento": copia el cuadro actual del video a una imagen JPG.
@@ -32,7 +33,8 @@ const TOUCH = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)'
 
 /**
  * Entrega la foto según el aparato:
- * - APK (Android): la guarda en caché y abre "Compartir" (Galería, WhatsApp, Drive…).
+ * - APK nueva: directo a la galería (DCIM/Camaras Rey Pez → Google Fotos).
+ * - APK vieja (sin plugin de galería): la guarda en caché y abre "Compartir".
  *   El WebView no sabe descargar archivos, por eso antes no pasaba nada.
  * - Celular en navegador: menú "Compartir" del sistema (en iPhone: "Guardar imagen").
  * - Computadora: descarga el archivo.
@@ -41,7 +43,10 @@ const TOUCH = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)'
 export async function deliverSnapshot(
   shot: { blob: Blob; dataUrl: string },
   filename: string,
-): Promise<'shared' | 'downloaded' | 'cancelled'> {
+): Promise<{ result: 'gallery' | 'shared' | 'downloaded' | 'cancelled'; uri?: string }> {
+  if (galleryAvailable()) {
+    return { result: 'gallery', uri: await saveToGallery(shot.blob, filename) };
+  }
   if (Capacitor.isNativePlatform()) {
     // Una APK vieja no trae estos plugins: la foto no se puede entregar.
     if (!Capacitor.isPluginAvailable('Filesystem') || !Capacitor.isPluginAvailable('Share')) {
@@ -58,10 +63,10 @@ export async function deliverSnapshot(
     });
     try {
       await Share.share({ title: filename, files: [uri] });
-      return 'shared';
+      return { result: 'shared' };
     } catch (err) {
       // Cerrar el menú sin elegir nada no es un error.
-      if (/cancel/i.test(String((err as Error)?.message ?? err))) return 'cancelled';
+      if (/cancel/i.test(String((err as Error)?.message ?? err))) return { result: 'cancelled' };
       throw err;
     }
   }
@@ -70,9 +75,9 @@ export async function deliverSnapshot(
   if (TOUCH && navigator.canShare?.({ files: [file] })) {
     try {
       await navigator.share({ files: [file], title: filename });
-      return 'shared';
+      return { result: 'shared' };
     } catch (err) {
-      if ((err as DOMException)?.name === 'AbortError') return 'cancelled';
+      if ((err as DOMException)?.name === 'AbortError') return { result: 'cancelled' };
       // Si compartir falla por otra razón, se intenta descargar.
     }
   }
@@ -85,5 +90,5 @@ export async function deliverSnapshot(
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
-  return 'downloaded';
+  return { result: 'downloaded' };
 }

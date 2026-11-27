@@ -11,6 +11,7 @@ import { buildHlsUrl, maskRtspUrlSafe } from '../lib/rtsp';
 import { isoDate, startPlayback } from '../lib/recordings';
 import { CLIP_FOLDER, recordingSupported, saveClip, startClip, type ClipRecorder } from '../lib/clipRecorder';
 import { RecordingsBar } from './RecordingsBar';
+import { canShareWhatsApp, GALLERY_FOLDER, shareWhatsApp, type SavedMedia } from '../lib/gallery';
 import { horaLupa } from './TimeScrubber';
 import { APK_SIN_PLUGINS, captureFrame, deliverSnapshot, snapshotName } from '../lib/snapshot';
 import type { DvrSettings } from '../lib/types';
@@ -141,18 +142,25 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
 
   const finishClip = useCallback(async (c: { rec: ClipRecorder; name: string }) => {
     setShotMsg('Guardando clip…');
+    setSaved(null);
     try {
       const { blob, ext } = await c.rec.stop();
-      const r = await saveClip(blob, `${c.name}.${ext}`);
+      const name = `${c.name}.${ext}`;
+      const { result, uri } = await saveClip(blob, name);
       setShotMsg(
-        r === 'saved'
+        result === 'gallery'
+          ? `Clip guardado en la galería (${GALLERY_FOLDER}).`
+          : result === 'saved'
           ? `Clip guardado en Documentos/${CLIP_FOLDER}.`
-          : r === 'downloaded'
+          : result === 'downloaded'
             ? 'Clip descargado.'
-            : r === 'shared'
+            : result === 'shared'
               ? 'Clip listo.'
               : null,
       );
+      if (result === 'gallery' || result === 'saved' || result === 'downloaded') {
+        setSaved({ kind: 'clip', name, blob, uri });
+      }
     } catch (e) {
       const msg = String((e as Error)?.message ?? e);
       setShotMsg(
@@ -225,6 +233,8 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
     if (seekFxTimer.current) clearTimeout(seekFxTimer.current);
   }, []);
   const [shotMsg, setShotMsg] = useState<string | null>(null);
+  // Última foto o clip guardado, para "Compartir por WhatsApp".
+  const [saved, setSaved] = useState<SavedMedia | null>(null);
   const { containerRef, zoom, zoomed, zoomAtClient, reset, handlers, style } = useDigitalZoom();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const closeMenu = useCallback(() => setMenu(null), []);
@@ -236,12 +246,23 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
       setShotMsg('No se pudo tomar la foto: el video aún no carga.');
       return;
     }
-    deliverSnapshot(shot, snapshotName(camera.name))
-      .then((r) =>
+    const name = snapshotName(camera.name);
+    setSaved(null);
+    deliverSnapshot(shot, name)
+      .then(({ result, uri }) => {
         setShotMsg(
-          r === 'downloaded' ? 'Foto descargada.' : r === 'shared' ? 'Foto lista.' : null,
-        ),
-      )
+          result === 'gallery'
+            ? `Foto guardada en la galería (${GALLERY_FOLDER}).`
+            : result === 'downloaded'
+              ? 'Foto descargada.'
+              : result === 'shared'
+                ? 'Foto lista.'
+                : null,
+        );
+        if (result === 'gallery' || result === 'downloaded') {
+          setSaved({ kind: 'foto', name, blob: shot.blob, uri });
+        }
+      })
       .catch((err: unknown) => {
         const msg = String((err as Error)?.message ?? err);
         setShotMsg(
@@ -252,12 +273,25 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
       });
   }, [camera.name, videoRef]);
 
+  const shareable = saved && canShareWhatsApp(saved) ? saved : null;
   useEffect(() => {
     if (!shotMsg) return;
     if (shotMsg === 'Guardando clip…') return;
-    const t = setTimeout(() => setShotMsg(null), shotMsg.startsWith('Foto') ? 4000 : 12000);
+    // Con botón de WhatsApp se deja más tiempo para alcanzar a tocarlo.
+    const ms = shareable ? 60000 : shotMsg.startsWith('Foto') ? 4000 : 12000;
+    const t = setTimeout(() => {
+      setShotMsg(null);
+      setSaved(null);
+    }, ms);
     return () => clearTimeout(t);
-  }, [shotMsg]);
+  }, [shotMsg, shareable]);
+
+  const sendWhatsApp = () => {
+    if (!shareable) return;
+    shareWhatsApp(shareable).catch((e: Error) =>
+      setShotMsg(`No se pudo abrir WhatsApp (${String(e?.message ?? e).slice(0, 80)}).`),
+    );
+  };
 
   const toggleFullscreen = useCallback(() => {
     if (document.fullscreenElement) void document.exitFullscreen();
@@ -459,6 +493,30 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
             role="status"
           >
             {shotMsg}
+          </span>
+        )}
+        {shareable && (
+          <span className="share-row">
+            <button type="button" className="wa-btn" onClick={sendWhatsApp}>
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.3-.4.7-1.4.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.9 11.9 0 0 0 4.6 4c1.7.7 2.4.8 3.2.7a2.8 2.8 0 0 0 1.8-1.3 2.3 2.3 0 0 0 .2-1.3c-.1-.1-.3-.2-.5-.3Z"
+                />
+              </svg>
+              Compartir {shareable.kind === 'clip' ? 'clip' : 'foto'} por WhatsApp
+            </button>
+            <button
+              type="button"
+              className="share-close"
+              aria-label="Cerrar"
+              onClick={() => {
+                setSaved(null);
+                setShotMsg(null);
+              }}
+            >
+              ✕
+            </button>
           </span>
         )}
         <code className="rtsp-line">{maskRtspUrlSafe(settings, camera, 0)}</code>

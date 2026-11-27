@@ -120,3 +120,21 @@ export function parseHora(texto: string, ampm: 'AM' | 'PM'): number | null {
   const h24 = (h % 12) + (pm ? 12 : 0);
   return h24 * 3600 + min * 60 + sec;
 }
+
+/**
+ * Mientras se escribe la hora pone los ":" solos: "620" → "6:20",
+ * "1212" → "12:12". Con 1 al inicio se decide en el tercer/cuarto dígito
+ * (121 → 1:21, 1212 → 12:12); del 2 al 9 la hora es de un dígito.
+ */
+export function formatHoraInput(texto: string): string {
+  const d = texto.replace(/\D/g, '');
+  if (!d) return '';
+  const twoDigitHour = d[0] === '0' || (d[0] === '1' && (d.length < 2 || Number(d[1]) <= 2));
+  if (!twoDigitHour) {
+    const x = d.slice(0, 3);
+    return x.length === 1 ? x : `${x[0]}:${x.slice(1)}`;
+  }
+  const x = d.slice(0, 4);
+  if (x.length <= 2) return x;
+  return `${x.slice(0, -2)}:${x.slice(-2)}`;
+}

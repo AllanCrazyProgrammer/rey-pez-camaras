@@ -276,6 +276,13 @@ input, code, pre { font-family: ui-monospace, Consolas, monospace; }
 .detail-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
 .detail-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
 .shot-msg { color: var(--ok); font-size: 0.9rem; font-weight: 600; }
+.share-row { display: inline-flex; gap: 6px; align-items: center; }
+.detail-actions .wa-btn {
+  display: inline-flex; align-items: center; gap: 8px; background: #25d366; border-color: #25d366;
+  color: #0b2e17; font-weight: 800;
+}
+.detail-actions .wa-btn:hover { background: #1fbe5b; border-color: #1fbe5b; }
+.detail-actions .share-close { padding-inline: 10px; }
 .shot-msg--error { color: var(--danger); }
 .rtsp-line { color: var(--muted); font-size: 0.8rem; word-break: break-all; }
 .hidden { display: none; }

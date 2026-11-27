@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CameraConfig } from '../lib/types';
-import { fetchTramos, hora12, isoDate, parseHora, toSec, type Tramo } from '../lib/recordings';
+import { fetchTramos, formatHoraInput, hora12, isoDate, parseHora, toSec, type Tramo } from '../lib/recordings';
 import { TimeScrubber } from './TimeScrubber';
 
 interface Props {
@@ -143,7 +143,7 @@ export function RecordingsBar({ camera, bridgeUrl, fecha, position, advancing, o
           <input
             ref={goInput}
             type="text"
-            inputMode="decimal"
+            inputMode="numeric"
             autoComplete="off"
             enterKeyHint="go"
             placeholder="5:37"
@@ -151,11 +151,12 @@ export function RecordingsBar({ camera, bridgeUrl, fecha, position, advancing, o
             value={goText}
             onChange={(e) => {
               const v = e.target.value;
-              setGoText(v);
-              setGoError(null);
               // Si escriben "pm" o "am" en el texto, se marca solo.
               const suf = v.toLowerCase().match(/(a|p)\.?\s*m?\.?\s*$/);
               if (suf) setGoAmpm(suf[1] === 'p' ? 'PM' : 'AM');
+              // Los ":" se ponen solos (620 → 6:20, 1212 → 12:12).
+              setGoText(formatHoraInput(v));
+              setGoError(null);
             }}
           />
           <div className="rec-go-ampm" role="radiogroup" aria-label="AM o PM">

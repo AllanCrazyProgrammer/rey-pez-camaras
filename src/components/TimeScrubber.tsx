@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { Haptics, ImpactStyle } from '@capacitor/haptics';
 
 /**
  * Deslizador de grabaciones tipo editor de video.
@@ -40,8 +42,13 @@ const TICK_STEPS = [1, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
-/** Vibración corta (Android en navegador; donde no hay, no hace nada). */
+/** Vibración corta: en la APK con el motor del teléfono, en el navegador con
+ *  navigator.vibrate; donde no hay, no hace nada. */
 function buzz(ms: number) {
+  if (Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('Haptics')) {
+    void Haptics.impact({ style: ms > 8 ? ImpactStyle.Medium : ImpactStyle.Light }).catch(() => {});
+    return;
+  }
   try {
     navigator.vibrate?.(ms);
   } catch {

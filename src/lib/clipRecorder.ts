@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { blobToBase64, galleryAvailable, saveToGallery } from './gallery';
 
 /**
  * Grabar un clip de lo que se está viendo (en vivo o una grabación).
@@ -93,28 +94,23 @@ export function startClip(video: HTMLVideoElement): ClipRecorder {
   };
 }
 
-function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result).split(',')[1] ?? '');
-    r.onerror = () => reject(new Error('No se pudo leer el clip'));
-    r.readAsDataURL(blob);
-  });
-}
-
 const TOUCH = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 export const CLIP_FOLDER = 'Camaras Rey Pez';
 
 /**
  * Guarda el clip en el aparato:
- * - APK (Android): en la carpeta Documentos/Camaras Rey Pez del teléfono.
+ * - APK nueva: en la galería (DCIM/Camaras Rey Pez → Google Fotos).
+ * - APK vieja: en la carpeta Documentos/Camaras Rey Pez del teléfono.
  * - Celular en navegador: menú "Compartir" (en iPhone: "Guardar video").
  * - Computadora: descarga el archivo.
  */
 export async function saveClip(
   blob: Blob,
   filename: string,
-): Promise<'saved' | 'shared' | 'downloaded' | 'cancelled'> {
+): Promise<{ result: 'gallery' | 'saved' | 'shared' | 'downloaded' | 'cancelled'; uri?: string }> {
+  if (galleryAvailable()) {
+    return { result: 'gallery', uri: await saveToGallery(blob, filename) };
+  }
   if (Capacitor.isNativePlatform()) {
     if (!Capacitor.isPluginAvailable('Filesystem')) throw new Error('APK_SIN_PLUGINS');
     const { Filesystem, Directory } = await import('@capacitor/filesystem');
@@ -124,16 +120,16 @@ export async function saveClip(
       directory: Directory.Documents,
       recursive: true,
     });
-    return 'saved';
+    return { result: 'saved' };
   }
 
   const file = new File([blob], filename, { type: blob.type });
   if (TOUCH && navigator.canShare?.({ files: [file] })) {
     try {
       await navigator.share({ files: [file], title: filename });
-      return 'shared';
+      return { result: 'shared' };
     } catch (err) {
-      if ((err as DOMException)?.name === 'AbortError') return 'cancelled';
+      if ((err as DOMException)?.name === 'AbortError') return { result: 'cancelled' };
     }
   }
 
@@ -145,5 +141,5 @@ export async function saveClip(
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
-  return 'downloaded';
+  return { result: 'downloaded' };
 }

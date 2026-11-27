@@ -348,7 +348,7 @@ input, code, pre { font-family: ui-monospace, Consolas, monospace; }
 }
 .rec-jumps button:hover:not(:disabled) { border-color: var(--accent); }
 .rec-jumps button:disabled { opacity: 0.5; cursor: default; }
-.rec-time { min-width: 6.5ch; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; font-size: 1.05rem; }
+.rec-time { min-width: 10ch; white-space: nowrap; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; font-size: 1.05rem; }
 .rec-line {
   position: relative; height: 34px; border-radius: 8px; cursor: pointer;
   background: var(--surface-2); border: 1px solid var(--border); overflow: visible;
@@ -364,6 +364,23 @@ input, code, pre { font-family: ui-monospace, Consolas, monospace; }
 .rec-hours span { position: absolute; transform: translateX(-50%); }
 .rec-hours span:first-child { transform: none; }
 .rec-hours span:last-child { transform: translateX(-100%); }
+.rec-hours small { font-size: 0.85em; margin-left: 1px; opacity: 0.8; }
 .rec-msg { margin: 4px 0 0; color: var(--muted); font-size: 0.9rem; }
 .rec-msg--error { color: var(--danger); }
 .detail-actions .rec-live-btn { border-color: var(--danger); color: var(--text); }
+
+/* Pausa y clips */
+.pause-frame { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.zoom-layer { position: relative; }
+.clip-badge {
+  position: absolute; top: 8px; left: 8px; padding: 3px 9px; border-radius: 999px;
+  font-size: 0.8rem; font-weight: 700; color: #fff; background: var(--danger);
+  font-variant-numeric: tabular-nums; animation: clip-blink 1.2s steps(2, start) infinite;
+}
+@keyframes clip-blink { to { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { .clip-badge { animation: none; } }
+.detail-actions .clip-stop-btn { background: var(--danger); border-color: var(--danger); color: #fff; font-variant-numeric: tabular-nums; }
+@media (max-width: 480px) {
+  /* En celular solo 12am · 6am · 12pm · 6pm · 12am, para que no se encimen. */
+  .rec-hours span:nth-child(even) { display: none; }
+}

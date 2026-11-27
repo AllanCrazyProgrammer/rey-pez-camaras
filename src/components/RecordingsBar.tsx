@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CameraConfig } from '../lib/types';
-import { fetchTramos, hms, isoDate, toSec, type Tramo } from '../lib/recordings';
+import { fetchTramos, hora12, isoDate, toSec, type Tramo } from '../lib/recordings';
 
 interface Props {
   camera: CameraConfig;
@@ -84,7 +84,7 @@ export function RecordingsBar({ camera, bridgeUrl, fecha, position, onSeek }: Pr
             ‹ 1 min
           </button>
           <span className="rec-time" aria-live="polite">
-            {position === null ? '--:--:--' : hms(position)}
+            {position === null ? '--:--:--' : hora12(position)}
           </span>
           <button type="button" onClick={() => jump(60)} disabled={position === null}>
             1 min ›
@@ -104,7 +104,7 @@ export function RecordingsBar({ camera, bridgeUrl, fecha, position, onSeek }: Pr
         aria-valuemin={0}
         aria-valuemax={DAY}
         aria-valuenow={position ?? 0}
-        aria-valuetext={position === null ? 'cargando' : hms(position)}
+        aria-valuetext={position === null ? 'cargando' : hora12(position)}
         onClick={(e) => onSeek(fecha, snap(secAt(e.clientX)))}
         onMouseMove={(e) => setHover(secAt(e.clientX))}
         onMouseLeave={() => setHover(null)}
@@ -125,14 +125,15 @@ export function RecordingsBar({ camera, bridgeUrl, fecha, position, onSeek }: Pr
         )}
         {hover !== null && (
           <span className="rec-hover" style={{ left: `${(hover / DAY) * 100}%` }}>
-            {hms(hover).slice(0, 5)}
+            {hora12(hover, false)}
           </span>
         )}
       </div>
       <div className="rec-hours" aria-hidden="true">
         {[0, 3, 6, 9, 12, 15, 18, 21, 24].map((h) => (
           <span key={h} style={{ left: `${(h / 24) * 100}%` }}>
-            {h}
+            {h % 12 === 0 ? 12 : h % 12}
+            <small>{h < 12 || h === 24 ? 'am' : 'pm'}</small>
           </span>
         ))}
       </div>

@@ -27,6 +27,15 @@ export function hms(sec: number): string {
   return `${pad(Math.floor(s / 3600))}:${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`;
 }
 
+/** Segundos desde medianoche → hora de 12 h, ej. "5:59:34 PM" o "5:59 PM". */
+export function hora12(sec: number, seconds = true): string {
+  const s = Math.max(0, Math.round(sec)) % 86400;
+  const h = Math.floor(s / 3600);
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  const mm = pad(Math.floor((s % 3600) / 60));
+  return `${h12}:${mm}${seconds ? `:${pad(s % 60)}` : ''} ${h < 12 ? 'AM' : 'PM'}`;
+}
+
 /** "HH:MM:SS" → segundos desde medianoche. */
 export function toSec(t: string): number {
   const [h, m, s] = t.split(':').map(Number);

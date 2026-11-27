@@ -9,6 +9,7 @@ import { useHls } from '../hooks/useHls';
 import { BLANK_POSTER } from '../lib/poster';
 import { buildHlsUrl, maskRtspUrlSafe } from '../lib/rtsp';
 import { isoDate, startPlayback } from '../lib/recordings';
+import { CLIP_FOLDER, recordingSupported, saveClip, startClip, type ClipRecorder } from '../lib/clipRecorder';
 import { RecordingsBar } from './RecordingsBar';
 import { APK_SIN_PLUGINS, captureFrame, deliverSnapshot, snapshotName } from '../lib/snapshot';
 import type { DvrSettings } from '../lib/types';
@@ -37,7 +38,18 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
   const [position, setPosition] = useState<number | null>(null);
   const recBase = useRef<number | null>(null);
 
-  const playUrl = rec
+  // Pausa: se guarda el último cuadro (para dejarlo en pantalla) y en qué
+  // hora iba la grabación; el video se desconecta mientras tanto.
+  const [paused, setPaused] = useState<{ frame: string | null; pos: number | null } | null>(null);
+  // Clip que se está grabando para guardar en el aparato.
+  const [clip, setClip] = useState<{ rec: ClipRecorder; started: number; name: string } | null>(null);
+  const clipRef = useRef(clip);
+  clipRef.current = clip;
+  const [, setTick] = useState(0);
+
+  const playUrl = paused
+    ? null
+    : rec
     ? rec.stream
       ? `${buildHlsUrl(settings.bridgeUrl, rec.stream)}&n=${rec.nonce}`
       : null
@@ -48,6 +60,10 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
     (fecha: string, sec: number) => {
       const prev = rec?.stream ?? undefined;
       setRec({ fecha, startSec: sec, stream: null, nonce: Date.now() });
+      if (paused) {
+        setPaused(null);
+        clipRef.current?.rec.resume();
+      }
       setPosition(sec);
       setRecError(null);
       startPlayback(settings.bridgeUrl, camera, fecha, sec, prev)
@@ -56,8 +72,82 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
         )
         .catch((e: Error) => setRecError(e.message));
     },
-    [camera, rec?.stream, settings.bridgeUrl],
+    [camera, paused, rec?.stream, settings.bridgeUrl],
   );
+
+  const togglePause = () => {
+    if (paused) {
+      const p = paused;
+      if (rec && p.pos !== null) {
+        seek(rec.fecha, p.pos); // sigue donde se quedó
+      } else {
+        setPaused(null);
+        clipRef.current?.rec.resume();
+      }
+      return;
+    }
+    const video = videoRef.current;
+    const frame = video ? (captureFrame(video)?.dataUrl ?? null) : null;
+    setPaused({ frame, pos: rec ? position : null });
+    clip?.rec.pause();
+  };
+
+  const startRecording = () => {
+    const video = videoRef.current;
+    if (!video?.videoWidth) return;
+    try {
+      const name = snapshotName(rec ? `${camera.name} grabacion` : camera.name).replace(/\.jpg$/, '');
+      setClip({ rec: startClip(video), started: Date.now(), name });
+      setShotMsg(null);
+    } catch (e) {
+      setShotMsg(`No se pudo grabar (${(e as Error).message}).`);
+    }
+  };
+
+  const finishClip = useCallback(async (c: { rec: ClipRecorder; name: string }) => {
+    setShotMsg('Guardando clip…');
+    try {
+      const { blob, ext } = await c.rec.stop();
+      const r = await saveClip(blob, `${c.name}.${ext}`);
+      setShotMsg(
+        r === 'saved'
+          ? `Clip guardado en Documentos/${CLIP_FOLDER}.`
+          : r === 'downloaded'
+            ? 'Clip descargado.'
+            : r === 'shared'
+              ? 'Clip listo.'
+              : null,
+      );
+    } catch (e) {
+      const msg = String((e as Error)?.message ?? e);
+      setShotMsg(
+        msg === 'APK_SIN_PLUGINS'
+          ? 'Para guardar clips instala la APK nueva.'
+          : `No se pudo guardar el clip (${msg.slice(0, 80)}).`,
+      );
+    }
+  }, []);
+
+  const stopRecording = () => {
+    if (!clip) return;
+    setClip(null);
+    void finishClip(clip);
+  };
+
+  // Contador del clip, y si se cierra la cámara a medio grabar, se guarda lo grabado.
+  useEffect(() => {
+    if (!clip) return;
+    const t = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [clip]);
+  useEffect(
+    () => () => {
+      if (clipRef.current) void finishClip(clipRef.current);
+    },
+    [finishClip],
+  );
+  const clipSecs = clip ? Math.floor((Date.now() - clip.started) / 1000) : 0;
+  const clipTime = `${Math.floor(clipSecs / 60)}:${String(clipSecs % 60).padStart(2, '0')}`;
 
   const openRecordings = useCallback(() => {
     // Por default: hoy, 10 minutos antes de ahora.
@@ -110,6 +200,7 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
 
   useEffect(() => {
     if (!shotMsg) return;
+    if (shotMsg === 'Guardando clip…') return;
     const t = setTimeout(() => setShotMsg(null), shotMsg.startsWith('Foto') ? 4000 : 12000);
     return () => clearTimeout(t);
   }, [shotMsg]);
@@ -196,6 +287,7 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
               poster={BLANK_POSTER}
               aria-label={camera.name}
             />
+            {paused?.frame && <img className="pause-frame" src={paused.frame} alt="" />}
           </div>
         ) : (
           <div className="detail-no-signal">
@@ -218,8 +310,11 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
           )
         )}
         {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={closeMenu} />}
-        <span className={`tile-status tile-status--${status}`}>
-          {rec && status === 'playing'
+        {clip && <span className="clip-badge">● REC {clipTime}</span>}
+        <span className={`tile-status tile-status--${paused ? 'idle' : status}`}>
+          {paused
+            ? 'En pausa'
+            : rec && status === 'playing'
             ? `Grabación · ${rec.fecha === isoDate(new Date()) ? 'hoy' : rec.fecha}`
             : rec && !rec.stream && !recError
               ? 'Buscando…'
@@ -242,7 +337,7 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
           camera={camera}
           bridgeUrl={settings.bridgeUrl}
           fecha={rec.fecha}
-          position={rec.stream && status === 'playing' ? position : null}
+          position={paused ? paused.pos : rec.stream && status === 'playing' ? position : null}
           onSeek={seek}
         />
       )}
@@ -256,6 +351,10 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
             onClick={() => {
               setRec(null);
               setRecError(null);
+              if (paused) {
+                setPaused(null);
+                clip?.rec.resume();
+              }
             }}
           >
             ● Volver a en vivo
@@ -264,6 +363,24 @@ export function CameraDetail({ camera, settings, hlsUrl, onClose, onPrev, onNext
           <button type="button" onClick={openRecordings} disabled={!hlsUrl}>
             🎞 Grabaciones
           </button>
+        )}
+        <button
+          type="button"
+          onClick={togglePause}
+          disabled={!paused && status !== 'playing'}
+        >
+          {paused ? '▶ Reanudar' : '⏸ Pausar'}
+        </button>
+        {clip ? (
+          <button type="button" className="clip-stop-btn" onClick={stopRecording}>
+            ⏹ Detener clip · {clipTime}
+          </button>
+        ) : (
+          recordingSupported() && (
+            <button type="button" onClick={startRecording} disabled={status !== 'playing'}>
+              ⏺ Grabar clip
+            </button>
+          )
         )}
         <button type="button" onClick={takeSnapshot} disabled={status !== 'playing'}>
           📸 Foto del momento

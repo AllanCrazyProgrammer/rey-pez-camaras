@@ -14,7 +14,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  */
 
 const DAY = 86400;
-const MIN_SPAN = 120; // segundos visibles con el máximo acercamiento
+const MIN_SPAN = 30; // segundos visibles con el máximo acercamiento
+/** Al abrir: 1 minuto a lo ancho, para elegir el segundo dentro del minuto. */
+const START_SPAN = 60;
 const MAX_SPAN = DAY;
 const LENS_ZOOM = 8; // dentro de la lupa el tiempo se ve 8 veces más cerca
 const H = 118; // alto en px de CSS
@@ -41,7 +43,9 @@ function tickLabel(sec: number, step: number): string {
   const h = Math.floor(s / 3600);
   const h12 = h % 12 === 0 ? 12 : h % 12;
   const ap = h < 12 ? 'am' : 'pm';
-  if (step < 60) return `${h12}:${pad(Math.floor((s % 3600) / 60))}.${pad(s % 60)}`;
+  // Dentro del minuto: el minuto completo con su hora ("5:37") y los
+  // segundos solos (":15", ":30", ":45").
+  if (step < 60) return s % 60 === 0 ? `${h12}:${pad(Math.floor((s % 3600) / 60))}` : `:${pad(s % 60)}`;
   if (step % 3600 === 0 && s % 3600 === 0) return `${h12} ${ap}`;
   return `${h12}:${pad(Math.floor((s % 3600) / 60))}`;
 }
@@ -145,6 +149,19 @@ export function TimeScrubber({ spans, position, advancing = false, onCommit }: P
         ctx.fillRect(x(a), STRIP_BOTTOM - 22, Math.max(1, x(b) - x(a)), 14);
       }
       ctx.globalAlpha = 1;
+      // Muy de cerca: se resalta el minuto que se está viendo y sus bordes
+      // van de arriba abajo, para ubicar el segundo dentro de ese minuto.
+      if (span <= 300) {
+        const m0 = Math.floor(center / 60) * 60;
+        ctx.fillStyle = C.accent;
+        ctx.globalAlpha = 0.1;
+        ctx.fillRect(x(m0), STRIP_TOP, 60 / spp, STRIP_BOTTOM - STRIP_TOP);
+        ctx.globalAlpha = 0.7;
+        for (let m = Math.ceil(Math.max(0, t0) / 60) * 60; m <= Math.min(DAY, t0 + span); m += 60) {
+          ctx.fillRect(Math.round(x(m)), STRIP_TOP, 1, STRIP_BOTTOM - STRIP_TOP);
+        }
+        ctx.globalAlpha = 1;
+      }
       // Marcas
       const minor = TICK_STEPS.find((s) => s / spp >= 7) ?? 21600;
       const major = TICK_STEPS.find((s) => s / spp >= 90 && s % minor === 0) ?? 21600;
@@ -213,8 +230,7 @@ export function TimeScrubber({ spans, position, advancing = false, onCommit }: P
         canvas.height = Math.round(H * dpr);
         canvas.style.height = `${H}px`;
       }
-      // Acercamiento inicial según el ancho: celular ~18 min, computadora ~50 min.
-      if (!s.span) s.span = s.spanGoal = Math.max(900, Math.min(3600, Math.round(w * 3)));
+      if (!s.span) s.span = s.spanGoal = START_SPAN;
       // Inercia (mueve el destino; lo que se ve lo sigue suave).
       if (!s.interacting && Math.abs(s.vel) > 0.00001) {
         s.goal = clampCenter(s.goal + s.vel * dt);
@@ -427,6 +443,7 @@ export function TimeScrubber({ spans, position, advancing = false, onCommit }: P
       <div className="scrubber-zoom" role="group" aria-label="Acercar la línea de tiempo">
         {(
           [
+            [60, '1 min'],
             [600, '10 min'],
             [3600, '1 h'],
             [6 * 3600, '6 h'],
@@ -437,7 +454,7 @@ export function TimeScrubber({ spans, position, advancing = false, onCommit }: P
             {txt}
           </button>
         ))}
-        <span className="scrubber-hint">Arrastra la línea · la lupa marca la hora</span>
+        <span className="scrubber-hint">Arrastra para elegir el segundo · la lupa marca la hora</span>
       </div>
     </div>
   );

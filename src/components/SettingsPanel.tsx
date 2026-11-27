@@ -9,6 +9,7 @@ import {
 } from '../lib/rtsp';
 import { channelLabel } from '../data/defaultCameras';
 import { applyTheme, readTheme, THEMES, type ThemeId } from '../lib/theme';
+import { ThemeModal } from './ThemeModal';
 
 interface Props {
   settings: DvrSettings;
@@ -19,11 +20,11 @@ interface Props {
 }
 
 const NAMES_STATUS_TEXT: Record<NamesSyncStatus, string> = {
-  local: 'Sin puente: los nombres se guardan solo en este aparato.',
-  loading: 'Cargando nombres de la Mac mini…',
-  synced: '✓ Nombres guardados en la Mac mini: se ven igual en todos tus aparatos.',
-  saving: 'Guardando en la Mac mini…',
-  error: 'No se pudo hablar con la Mac mini: por ahora los nombres quedan solo en este aparato.',
+  local: 'Solo en este aparato',
+  loading: 'Cargando…',
+  synced: '✓ Iguales en todos tus aparatos',
+  saving: 'Guardando…',
+  error: 'Sin Mac mini: solo en este aparato',
 };
 
 /**
@@ -40,10 +41,12 @@ export function SettingsPanel({
 }: Props) {
   const [copied, setCopied] = useState(false);
   const [theme, setTheme] = useState<ThemeId>(readTheme);
+  const [themeOpen, setThemeOpen] = useState(false);
   const pickTheme = (id: ThemeId) => {
     setTheme(id);
     applyTheme(id);
   };
+  const themeInfo = THEMES.find((t) => t.id === theme) ?? THEMES[0];
 
   // El YAML solo se regenera si cambian ajustes o cámaras.
   const yaml = useMemo(
@@ -92,72 +95,28 @@ export function SettingsPanel({
   }, [setupLink]);
 
   return (
-    <section className="panel" aria-label="Ajustes del DVR y cámaras">
+    <>
+    <section className="panel settings" aria-label="Ajustes">
       <h2>Ajustes</h2>
-      <p className="panel-note">
-        La IP y la clave se guardan solo en este navegador. Nunca se suben al
-        repo ni a ningún servidor.
-      </p>
 
       <fieldset>
         <legend>Apariencia</legend>
-        <p className="panel-note">Solo cambia cómo se ve; cada aparato guarda el suyo.</p>
-        <div className="theme-grid" role="radiogroup" aria-label="Tema de la app">
-          {THEMES.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              role="radio"
-              aria-checked={theme === t.id}
-              className={`theme-card${theme === t.id ? ' theme-card--on' : ''}`}
-              data-preview={t.id}
-              onClick={() => pickTheme(t.id)}
-            >
-              <span className="theme-swatches" aria-hidden="true">
-                {t.swatches.map((c) => (
-                  <i key={c} style={{ background: c }} />
-                ))}
-              </span>
-              <b>{t.name}</b>
-              <small>{t.description}</small>
-            </button>
-          ))}
-        </div>
+        <button type="button" className="setting-row" onClick={() => setThemeOpen(true)}>
+          <span className="setting-label">Tema</span>
+          <span className="palette palette--sm" aria-hidden="true">
+            {themeInfo.swatches.map((c) => (
+              <i key={c} style={{ background: c }} />
+            ))}
+          </span>
+          <span className="setting-value">{themeInfo.name}</span>
+          <span className="setting-go" aria-hidden="true">›</span>
+        </button>
       </fieldset>
 
       <fieldset>
-        <legend>DVR Dahua DH-XVR1B16H-I/T</legend>
+        <legend>Puente</legend>
         <label>
-          IP local del DVR
-          <input
-            type="text"
-            inputMode="numeric"
-            placeholder="192.168.1.108"
-            value={settings.dvrIp}
-            onChange={(e) => updateSettings({ dvrIp: e.target.value })}
-            autoComplete="off"
-          />
-        </label>
-        <label>
-          Usuario
-          <input
-            type="text"
-            value={settings.username}
-            onChange={(e) => updateSettings({ username: e.target.value })}
-            autoComplete="username"
-          />
-        </label>
-        <label>
-          Clave
-          <input
-            type="password"
-            value={settings.password}
-            onChange={(e) => updateSettings({ password: e.target.value })}
-            autoComplete="current-password"
-          />
-        </label>
-        <label>
-          Puente go2rtc (dirección https de Tailscale de la Mac mini)
+          Dirección
           <input
             type="url"
             inputMode="url"
@@ -167,84 +126,24 @@ export function SettingsPanel({
             autoComplete="off"
           />
         </label>
-        {insecure ? (
-          <p className="warn" role="alert">
-            ⚠ El puente es <code>http://</code> y esta app está en{' '}
-            <code>https://</code>: el navegador bloquea el video. Pon la
-            dirección https que da Tailscale Serve en la Mac mini, por ejemplo{' '}
-            <code>https://mac-mini.tu-red.ts.net</code> (Guía del puente, paso
-            5). En Chrome, en la misma Mac mini, también sirve{' '}
-            <code>http://localhost:1984</code> para probar.
-          </p>
-        ) : (
-          <p className={hasBridge ? 'ok' : 'warn'}>
-            {hasBridge
-              ? '✓ Puente configurado: con esto ya se ve el video en este aparato.'
-              : 'Falta la dirección del puente para ver video en vivo.'}
-          </p>
-        )}
+        <p className={insecure ? 'warn' : hasBridge ? 'ok' : 'warn'} role={insecure ? 'alert' : undefined}>
+          {insecure
+            ? '⚠ Usa la dirección https:// de Tailscale.'
+            : hasBridge
+              ? '✓ Conectado'
+              : 'Falta la dirección'}
+        </p>
         {setupLink && (
-          <div className="setup-link">
-            <p className="panel-note">
-              Para ver las cámaras en otro aparato (laptop, celular, pantalla):
-              copia este link y ábrelo ahí, con Tailscale prendido. Deja el
-              puente guardado solo, sin escribir nada.
-            </p>
-            <button type="button" onClick={copySetupLink}>
-              {linkCopied ? '✓ Link copiado' : 'Copiar link para otro aparato'}
-            </button>
-          </div>
+          <button type="button" onClick={copySetupLink}>
+            {linkCopied ? '✓ Link copiado' : 'Copiar link para otro aparato'}
+          </button>
         )}
-        <p className="panel-note">
-          La IP, el usuario y la clave del DVR solo hacen falta en la Mac mini,
-          para generar el go2rtc.yaml.
-        </p>
       </fieldset>
 
       <fieldset>
-        <legend>DVR Hikvision DS-7216HQHI-K1</legend>
-        <label>
-          IP local del Hikvision
-          <input
-            type="text"
-            inputMode="numeric"
-            placeholder="192.168.1.x"
-            value={settings.hikIp}
-            onChange={(e) => updateSettings({ hikIp: e.target.value })}
-            autoComplete="off"
-          />
-        </label>
-        <label>
-          Usuario
-          <input
-            type="text"
-            value={settings.hikUsername}
-            onChange={(e) => updateSettings({ hikUsername: e.target.value })}
-            autoComplete="off"
-          />
-        </label>
-        <label>
-          Clave
-          <input
-            type="password"
-            value={settings.hikPassword}
-            onChange={(e) => updateSettings({ hikPassword: e.target.value })}
-            autoComplete="off"
-          />
-        </label>
-        <p className="panel-note">
-          Igual que el Dahua: solo hace falta en la Mac mini para el
-          go2rtc.yaml. Sin IP, el Hikvision no entra en el archivo.
-        </p>
-      </fieldset>
-
-      <fieldset>
-        <legend>Cámaras ({cameras.length})</legend>
-        <p className={namesStatus === 'synced' ? 'ok' : namesStatus === 'error' ? 'warn' : 'panel-note'}>
+        <legend>Cámaras · {cameras.length}</legend>
+        <p className={`settings-status ${namesStatus === 'synced' ? 'ok' : namesStatus === 'error' ? 'warn' : ''}`}>
           {NAMES_STATUS_TEXT[namesStatus]}
-        </p>
-        <p className="panel-note">
-          También puedes cambiar el nombre desde el mosaico con el lápiz ✎.
         </p>
         <ul className="camera-list">
           {cameras.map((cam) => (
@@ -283,39 +182,118 @@ export function SettingsPanel({
         </ul>
       </fieldset>
 
-      <fieldset>
-        <legend>Direcciones RTSP (clave oculta)</legend>
-        <ul className="rtsp-list">
-          {cameras
-            .filter((c) => c.enabled)
-            .map((cam) => (
-              <li key={cam.id}>
-                <strong>
-                  {cam.name} · {cam.location}
-                </strong>
-                <code>{maskRtspUrlSafe(settings, cam, 0)}</code>
-                <code>{maskRtspUrlSafe(settings, cam, 1)} (sub)</code>
-              </li>
-            ))}
-        </ul>
-      </fieldset>
+      <details className="settings-advanced">
+        <summary>
+          Avanzado <small>DVR y archivo de la Mac mini</small>
+        </summary>
 
-      <fieldset>
-        <legend>Puente go2rtc — archivo generado</legend>
-        <p className="panel-note">
-          Este archivo lleva la clave real: guárdalo solo en la compu de la
-          bodega, nunca en GitHub.
-        </p>
-        <pre className="yaml">{yaml}</pre>
-        <div className="row">
-          <button type="button" onClick={copyYaml}>
-            {copied ? '✓ Copiado' : 'Copiar go2rtc.yaml'}
-          </button>
-          <button type="button" onClick={downloadYaml}>
-            Descargar go2rtc.yaml
-          </button>
-        </div>
-      </fieldset>
+        <fieldset>
+          <legend>Dahua</legend>
+          <label>
+            IP
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder="192.168.1.108"
+              value={settings.dvrIp}
+              onChange={(e) => updateSettings({ dvrIp: e.target.value })}
+              autoComplete="off"
+            />
+          </label>
+          <div className="settings-pair">
+            <label>
+              Usuario
+              <input
+                type="text"
+                value={settings.username}
+                onChange={(e) => updateSettings({ username: e.target.value })}
+                autoComplete="username"
+              />
+            </label>
+            <label>
+              Clave
+              <input
+                type="password"
+                value={settings.password}
+                onChange={(e) => updateSettings({ password: e.target.value })}
+                autoComplete="current-password"
+              />
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Hikvision</legend>
+          <label>
+            IP
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder="192.168.1.x"
+              value={settings.hikIp}
+              onChange={(e) => updateSettings({ hikIp: e.target.value })}
+              autoComplete="off"
+            />
+          </label>
+          <div className="settings-pair">
+            <label>
+              Usuario
+              <input
+                type="text"
+                value={settings.hikUsername}
+                onChange={(e) => updateSettings({ hikUsername: e.target.value })}
+                autoComplete="off"
+              />
+            </label>
+            <label>
+              Clave
+              <input
+                type="password"
+                value={settings.hikPassword}
+                onChange={(e) => updateSettings({ hikPassword: e.target.value })}
+                autoComplete="off"
+              />
+            </label>
+          </div>
+        </fieldset>
+        <p className="panel-note">Se guarda solo en este aparato. Solo hace falta en la Mac mini.</p>
+
+        <fieldset>
+          <legend>Direcciones RTSP</legend>
+          <ul className="rtsp-list">
+            {cameras
+              .filter((c) => c.enabled)
+              .map((cam) => (
+                <li key={cam.id}>
+                  <strong>{cam.name}</strong>
+                  <code>{maskRtspUrlSafe(settings, cam, 0)}</code>
+                  <code>{maskRtspUrlSafe(settings, cam, 1)}</code>
+                </li>
+              ))}
+          </ul>
+        </fieldset>
+
+        <fieldset>
+          <legend>go2rtc.yaml</legend>
+          <p className="panel-note">Lleva la clave: guárdalo solo en la Mac mini.</p>
+          <pre className="yaml">{yaml}</pre>
+          <div className="row">
+            <button type="button" onClick={copyYaml}>
+              {copied ? '✓ Copiado' : 'Copiar'}
+            </button>
+            <button type="button" onClick={downloadYaml}>
+              Descargar
+            </button>
+          </div>
+        </fieldset>
+      </details>
     </section>
+    <ThemeModal
+      open={themeOpen}
+      current={theme}
+      onPick={pickTheme}
+      onClose={() => setThemeOpen(false)}
+    />
+    </>
   );
 }
